@@ -135,6 +135,7 @@ export default function BluetoothWifiProvisioning({
   formValues,
   startTimer,
   debugPreview,
+  beforeWriteCredentials,
 }: any) {
   const {
     connectionState,
@@ -144,6 +145,7 @@ export default function BluetoothWifiProvisioning({
   } = useBluetoothWifiProvisioning({
     continueProcess,
     deviceId: formValues.deviceId,
+    beforeWriteCredentials,
   });
 
   const { control, register, handleSubmit, watch, setValue, setFocus } =
@@ -501,7 +503,9 @@ export default function BluetoothWifiProvisioning({
                 <Button
                   type="submit"
                   className={styles.pressedButton}
-                  disabled={!allowSubmitPassword}
+                  disabled={
+                    !allowSubmitPassword || bluetoothWifiProvisioning.isWriting
+                  }
                   large
                 >
                   <Trans>Submit</Trans>
@@ -533,11 +537,11 @@ export default function BluetoothWifiProvisioning({
                   render={({ field }) => (
                     <Checkbox
                       id="wifi-network-has-no-password"
-                      labelText={
-                        <Trans>This network has no password</Trans>
-                      }
+                      labelText={<Trans>This network has no password</Trans>}
                       checked={field.value === true}
-                      onChange={(event: React.ChangeEvent<HTMLInputElement>) => {
+                      onChange={(
+                        event: React.ChangeEvent<HTMLInputElement>
+                      ) => {
                         const checked = event.target.checked;
                         field.onChange(checked);
                         if (checked) setValue("password", "");

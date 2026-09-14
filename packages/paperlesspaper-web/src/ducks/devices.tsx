@@ -159,7 +159,10 @@ export const devicesApi: any = generateCrudApi({
         body: request.body,
       }),
       invalidatesTags: (result) =>
-        result?.activation_status === "success"
+        result?.activation_status === "success" &&
+        result?.createdDevice?.id &&
+        (result?.registrationCompleted ||
+          !result?.createdDevice?.deviceId?.startsWith("epd"))
           ? [{ type: "devices", id: "devices" + "LIST" }]
           : [],
     }),

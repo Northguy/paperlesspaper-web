@@ -19,7 +19,7 @@ import classnames from "classnames";
 import InlineLoadingLarge from "components/InlineLoadingLarge";
 // TODO: import emptyPixel from "./illustrations/1x1.png";
 import useQs, { getQueryStringValue } from "helpers/useQs";
-import useTimer from "./useTime";
+import { useDeviceActivation } from "helpers/devices/useDeviceActivation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faExternalLink } from "@fortawesome/pro-solid-svg-icons";
 import { useIsDesktop } from "@internetderdinge/web";
@@ -263,7 +263,6 @@ export default function SettingsDevicesNew({
   const params = useParams<{ organization?: string }>();
   const [formValues, setValues] = useState<any>();
 
-  const [response, setResponse] = useState<any>();
   const [preflightRegistrationError, setPreflightRegistrationError] =
     useState<any>();
   const [step, setStep] = useState<string>("start");
@@ -280,10 +279,9 @@ export default function SettingsDevicesNew({
   const resetSingle = () => {
     registrationAttemptRef.current += 1;
     setStep("start");
-    setResponse(undefined);
     setPreflightRegistrationError(undefined);
     setValues(undefined);
-    resetTimer();
+    activation.cancel();
   };
 
   const query = useQs();
@@ -298,6 +296,8 @@ export default function SettingsDevicesNew({
   const currentPatient = patient || user;
   const [registerDevice, registerDeviceResult] =
     devicesApi.useRegisterDeviceMutation();
+  const activation = useDeviceActivation(registerDevice, currentOrganization);
+  const { response, time } = activation;
   const [
     getDeviceRegistrationStatus,
     getDeviceRegistrationStatusResult,
@@ -313,17 +313,20 @@ export default function SettingsDevicesNew({
     },
   });
 
-  const preflightExistingDeviceRegistration = async (values) => {
+  const preflightExistingDeviceRegistration = async (
+    values,
+    attemptId: number
+  ) => {
     const submitValues = createDeviceRegistrationValues(values);
 
     try {
-      await getDeviceRegistrationStatus({
+      const status = await getDeviceRegistrationStatus({
         id: submitValues.id,
         organization: currentOrganization,
       }).unwrap();
-      return true;
+      return status;
     } catch (error) {
-      setResponse(undefined);
+      if (registrationAttemptRef.current !== attemptId) return false;
       setPreflightRegistrationError(
         error?.data?.message
           ? error
@@ -360,14 +363,13 @@ export default function SettingsDevicesNew({
       const submitValues = createDeviceRegistrationValues(submitValuesInput);
 
       setStep("onboarding");
-      registerDevice(submitValues);
+      void activation.start(submitValues);
       setValues(submitValues);
     }
   };
 
   const submitNewDigitalDevice = (values) => {
     if (!currentOrganization) {
-      setResponse(undefined);
       setPreflightRegistrationError({
         data: { message: t("Organization not found") },
       });
@@ -387,10 +389,15 @@ export default function SettingsDevicesNew({
     void (async () => {
       if (step === "start") {
         const canContinue = await preflightExistingDeviceRegistration(
-          submitValuesInput
+          submitValuesInput,
+          attemptId
         );
 
         if (!canContinue || registrationAttemptRef.current !== attemptId) {
+          return;
+        }
+        if (canContinue.mode === "already_registered") {
+          continueDeviceRegistration({ ...submitValuesInput, wifiStatus: "1" });
           return;
         }
       }
@@ -401,24 +408,25 @@ export default function SettingsDevicesNew({
     return false;
   };
 
-  const { time, startTimer, resetTimer, intervalID } = useTimer(60);
+  useEffect(
+    () => () => {
+      registrationAttemptRef.current += 1;
+    },
+    [currentOrganization]
+  );
 
-  useEffect(() => {
-    if (registerDeviceResult.data) setResponse(registerDeviceResult);
-    if (
-      step === "onboarding" &&
-      registerDeviceResult.data?.activation_status &&
-      registerDeviceResult.data?.activation_status !== "success" &&
-      registerDeviceResult.data?.activation_status !== "timeout"
-    ) {
-      setTimeout(() => {
-        if (registerDeviceResult.data?.activation_status !== "error") {
-          formValues.body.enable = false;
-        }
-        registerDevice({ ...formValues, patient });
-      }, 4000);
-    }
-  }, [registerDeviceResult.data?.activation_status]);
+  const beforeWriteWifiCredentials = async () => {
+    const attemptId = registrationAttemptRef.current;
+    const result = await activation.start(
+      createDeviceRegistrationValues(formValues),
+      true
+    );
+    if (attemptId !== registrationAttemptRef.current) return false;
+    if (result?.activation_status === "pending") return true;
+    // Keep BLE mounted while the request is pending; only leave it for a final result.
+    setStep("onboarding");
+    return false;
+  };
 
   const setDeviceId = (e) => {
     // if e is string
@@ -433,7 +441,8 @@ export default function SettingsDevicesNew({
   };
 
   const continueAfterWifiOnboarding = () => {
-    submitNewDigitalDevice({ deviceId: formValues.deviceId });
+    setStep("onboarding");
+    activation.resume();
   };
 
   const store = useSettingsForm({
@@ -465,10 +474,9 @@ export default function SettingsDevicesNew({
 
   const deviceKind = deviceByDeviceName(deviceIdWatch);
   const hasWifi = deviceKindHasFeature("wifi", deviceKind?.id);
-  const registrationError =
-    preflightRegistrationError || registerDeviceResult?.error;
+  const registrationError = preflightRegistrationError || activation.error;
   const registrationIsError =
-    !!preflightRegistrationError || registerDeviceResult.isError;
+    !!preflightRegistrationError || !!activation.error;
   const debugState = isDebug
     ? getRegistrationDebugState(debugScreen)
     : undefined;
@@ -501,7 +509,7 @@ export default function SettingsDevicesNew({
       displayedStep,
       activationStatus: displayedResponse?.data?.activation_status,
       secondsRemaining: time,
-      timerActive: intervalID !== null,
+      timerActive: response?.data?.activation_status === "pending",
       allowSubmit,
       onboardingDialog: !!onboardingDialog,
     },
@@ -573,9 +581,7 @@ export default function SettingsDevicesNew({
                   scale={0.7}
                   dataTestId="scan-code-button"
                   buttonText={
-                    isDesktop
-                      ? t("Scan code with Webcam")
-                      : t("Scan code")
+                    isDesktop ? t("Scan code with Webcam") : t("Scan code")
                   }
                   // scanType="data_matrix"
                   large
@@ -726,11 +732,9 @@ export default function SettingsDevicesNew({
                 <Trans>Go to device</Trans>
               </ButtonRouter>
             ) : (
-              <>
-                {/*<Button onClick={resetSingle} kind="tertiary">
+              <Button onClick={resetSingle} kind="tertiary">
                 <Trans>Start again</Trans>
-            </Button>*/}
-              </>
+              </Button>
             )}
           </div>
         </>
@@ -750,7 +754,7 @@ export default function SettingsDevicesNew({
           continueProcess={continueAfterWifiOnboarding}
           submitNewDigitalDevice={submitNewDigitalDevice}
           formValues={displayedFormValues}
-          startTimer={startTimer}
+          beforeWriteCredentials={beforeWriteWifiCredentials}
           debugPreview={hasDebugState}
         />
       ) : displayedStep === "onboarding-sleep-error" ? (
@@ -811,7 +815,10 @@ export default function SettingsDevicesNew({
                 </Trans>
               </span>
               <small>
-                <Trans>Your device is being connected...</Trans>
+                <Trans>
+                  Press the button on the device once, or wait for the Wi-Fi
+                  setup to confirm activation.
+                </Trans>
               </small>
             </p>
           </InfoWrapper>
@@ -916,7 +923,11 @@ export default function SettingsDevicesNew({
             }
           >
             <p>
-              <Trans>No button press was recognized. Please start again.</Trans>
+              <Trans>
+                Activation was not confirmed within five minutes. Please try
+                again. An already active device remains with its previous
+                organization.
+              </Trans>
             </p>
             <DebugErrorDetails
               area="Device registration"

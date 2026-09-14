@@ -1,8 +1,14 @@
-import { Router } from "express";
+import {
+  Router,
+  type Request,
+  type Response,
+  type NextFunction,
+} from "express";
 import multer from "multer";
 import {
   auth,
   buildRouterAndDocs,
+  catchAsync,
   createDevicesRoute,
   uploadSingleImageFromWebsiteSchema,
   validateAdmin,
@@ -11,6 +17,10 @@ import {
 import type { RouteSpec } from "@internetderdinge/api";
 import { z } from "zod";
 import devicesController from "./devices.controller";
+import {
+  getRegistrationStatus,
+  registerDevice,
+} from "./deviceRegistration.service.js";
 import {
   deleteDeviceByDeviceIdSchema,
   getDeviceUploadLogsSchema,
@@ -153,7 +163,31 @@ router.use(
   createDevicesRoute({
     routeSpecs: (specs: RouteSpec[]) =>
       specs.map((spec) =>
-        spec.method === "get" && spec.path === "/events/:deviceId"
+        spec.path === "/registration-status/:deviceId" ||
+        spec.path === "/registerdevice/:deviceId"
+          ? {
+              ...spec,
+              responseSchema: z.any(),
+              description:
+                "Register or transfer an e-paper device after IoT confirms ownership for the authorized target organization. Availability checks never reset devices. Activation secrets stay on the server.",
+              handler: catchAsync(
+                async (req: Request, res: Response, next: NextFunction) => {
+                  const deviceId = req.params.deviceId.replace(/\s/g, "");
+                  if (!deviceId.startsWith("epd")) {
+                    return spec.handler(req, res, next);
+                  }
+                  const result =
+                    spec.method === "get"
+                      ? await getRegistrationStatus(
+                          deviceId,
+                          String(req.query.organization)
+                        )
+                      : await registerDevice(deviceId, req.body);
+                  res.send(result);
+                }
+              ),
+            }
+          : spec.method === "get" && spec.path === "/events/:deviceId"
           ? {
               ...spec,
               description: `
@@ -182,9 +216,9 @@ The latest update state is also available in the device information
 payload under the updatePending property.
 `,
             }
-          : spec,
+          : spec
       ),
-  }),
+  })
 );
 buildRouterAndDocs(router, devicesRouteSpecs, "/devices", ["Devices"]);
 
