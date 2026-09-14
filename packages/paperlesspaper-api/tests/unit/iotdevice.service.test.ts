@@ -64,6 +64,23 @@ vi.mock("@internetderdinge/api", () => ({
 }));
 
 describe("iotdevice.service", () => {
+  it("uploads the first frame for a new ownership assignment even if the previous owner's cached frame matches", async () => {
+    const frame = await sharp({ create: { width: 8, height: 8, channels: 3, background: "white" } }).png().toBuffer();
+    axiosMock.get.mockResolvedValue({ data: frame });
+    compareImagesMock.mockResolvedValue(100);
+    const service = await import("../../src/iotdevice/iotdevice.service");
+    // IoT has cleared its epdPicture object on takeover. Paperlesspaper's
+    // ePaperDeviceImages cache is keyed by serial and survives registration.
+    const result = await service.uploadSingleImage({
+      deviceName: "epd7-transferred",
+      deviceId: "new-owner-device-id",
+      id: "new-owner-paper-id",
+      buffer: frame,
+      bufferOriginal: frame,
+    });
+    expect(result.skippedUpload).toBe(false);
+    expect(axiosMock.put).toHaveBeenCalledOnce();
+  });
   beforeEach(() => {
     vi.clearAllMocks();
     uploadParams.length = 0;

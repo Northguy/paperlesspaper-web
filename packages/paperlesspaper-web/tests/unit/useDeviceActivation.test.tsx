@@ -171,3 +171,25 @@ it("retries a transient polling failure without starting another activation", as
   expect(register.mock.calls[2][0].body.enable).toBe(false);
   hook.unmount();
 });
+
+it("leaves pending after five minutes even when an HTTP polling request never settles", async () => {
+  const register = api(pending);
+  const hook = renderHook(() => useDeviceActivation(register, "org-b"));
+  try {
+    await act(async () => {
+      await hook.result.current.start(values);
+    });
+    register.mockImplementationOnce(() => ({
+      unwrap: () => new Promise(() => {}),
+    }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(304000);
+    });
+    expect(hook.result.current.time).toBe(0);
+    expect(hook.result.current.response.data.activation_status).not.toBe(
+      "pending"
+    );
+  } finally {
+    hook.unmount();
+  }
+});

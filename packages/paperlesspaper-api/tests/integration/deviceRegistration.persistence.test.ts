@@ -30,6 +30,8 @@ vi.mock("@internetderdinge/api", async () => {
 
 import { Device } from "@internetderdinge/api";
 import Paper from "../../src/papers/papers.model.js";
+import DevicesLogs from "../../src/devicesLogs/devicesLogs.model.js";
+import { getDeviceUploadLogs } from "../../src/devicesLogs/devicesLogs.service.js";
 import {
   getRegistrationStatus,
   registerDevice,
@@ -66,6 +68,7 @@ describe.skipIf(!url)("device registration MongoDB persistence", () => {
     iot.activateDevice.mockReset();
     await Device.deleteMany({});
     await Paper.deleteMany({});
+    await DevicesLogs.deleteMany({});
     previous = await Device.create({
       deviceId,
       organization: orgA,
@@ -254,5 +257,49 @@ describe.skipIf(!url)("device registration MongoDB persistence", () => {
       })
     ).rejects.toThrow("Patient is not part");
     expect(iot.activateDevice).not.toHaveBeenCalled();
+  });
+
+  it("does not expose the previous organization's upload logs after takeover", async () => {
+    await DevicesLogs.create({
+      attemptId: "previous-owner-upload",
+      deviceName: deviceId,
+      deviceId: String(previous._id),
+      paperId: String(paper._id),
+      render: { url: "https://previous-owner.invalid/private-dashboard" },
+      startedAt: new Date(),
+    });
+    iot.activateDevice.mockResolvedValue(confirmed);
+    const result = await registerDevice(deviceId, body);
+    const visibleLogs = await getDeviceUploadLogs({
+      deviceId: String(result.createdDevice._id),
+      deviceName: deviceId,
+    });
+    expect(visibleLogs).toEqual([]);
+  });
+
+  it("resumes an activation after a failed first save instead of resetting it on Start again", async () => {
+    await Device.deleteMany({});
+    iot.activateDevice.mockResolvedValue(confirmed);
+    vi.spyOn(Device.collection, "insertOne").mockRejectedValueOnce(
+      new Error("temporary storage outage")
+    );
+    await expect(registerDevice(deviceId, body)).rejects.toThrow(
+      "temporary storage outage"
+    );
+
+    // The hardware has confirmed this organization, but the first local save failed.
+    // The UI's Start again path sends enable:true, rather than resuming polling.
+    iot.activateDevice.mockReset();
+    iot.activateDevice.mockImplementation(async (_id, _org, enable, reset) =>
+      reset
+        ? { activation_status: "reset" }
+        : enable
+        ? { activation_status: "pending" }
+        : confirmed
+    );
+    await registerDevice(deviceId, { ...body, enable: true });
+    expect(iot.activateDevice.mock.calls.some((call) => call[3] === true)).toBe(
+      false
+    );
   });
 });
