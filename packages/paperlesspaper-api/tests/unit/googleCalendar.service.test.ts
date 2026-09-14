@@ -135,4 +135,31 @@ describe("googleCalendar.service", () => {
       }),
     );
   });
+  it("lists calendars and events with an access token even without a refresh token", async () => {
+    googleApisMock.eventsList.mockResolvedValue({ data: { items: [] } });
+    const result = await getCalendarEvents({ meta: {
+      googleCalendar: { access_token: "access-token" },
+      selectedCalendars: { primary: true },
+    } });
+    expect(result.calendars).toHaveLength(2);
+    expect(googleApisMock.eventsList).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    ["2026-03-29T00:30:00Z", "2026-03-28T23:00:00.000Z", "2026-03-29T22:00:00.000Z"],
+    ["2026-10-25T00:30:00Z", "2026-10-24T22:00:00.000Z", "2026-10-25T23:00:00.000Z"],
+  ])("queries only the display day across DST at %s", async (now, timeMin, timeMax) => {
+    vi.setSystemTime(new Date(now));
+    googleApisMock.eventsList.mockResolvedValue({ data: { items: [] } });
+    await getCalendarEvents({
+      kind: "google-calendar",
+      meta: {
+        googleCalendar: { access_token: "access-token" },
+        selectedCalendars: { primary: true },
+        timezone: "Europe/Berlin", highlightToday: true, dayRange: 30,
+      },
+    });
+    expect(googleApisMock.eventsList).toHaveBeenCalledWith(expect.objectContaining({timeMin, timeMax}));
+  });
+
 });

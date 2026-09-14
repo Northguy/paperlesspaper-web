@@ -25,6 +25,8 @@ import etJsonGeneratedPwa from "./generated-pwa/et.json";
 import seJsonGeneratedPwa from "./generated-pwa/se.json";
 import czJsonGeneratedPwa from "./generated-pwa/cz.json";
 
+import languages from "./languages";
+
 import { backendOptions } from "./backendOptions";
 import HttpBackend from "i18next-http-backend";
 
@@ -34,9 +36,8 @@ const options = {
     // console.log("convertDetectedLanguage", lng);
 
     const language = lng.toLowerCase().replace("-", "_").split("_")?.[0];
-    if (language === "sv") {
-      return "se";
-    }
+    if (language === "sv") return "se";
+    if (language === "cs") return "cz";
     return language.length === 2 ? language : "en";
   },
 };
@@ -79,7 +80,9 @@ i18n.use(initReactI18next).init({
       pwa: { ...czJsonGeneratedPwa, ...czJson },
     },
   },
-  //fallbackLng: "en",
+  fallbackLng: "en",
+  supportedLngs: Object.keys(languages),
+  returnEmptyString: false,
 
   backend: backendOptions,
 

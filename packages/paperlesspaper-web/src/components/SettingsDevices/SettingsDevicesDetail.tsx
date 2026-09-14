@@ -45,7 +45,12 @@ function NewEntrySuccess() {
 }
 
 function UpdateEntrySuccess() {
-  return <Trans>The device has been successfully updated</Trans>;
+  return (
+    <Trans>
+      Settings saved. Your frame will receive the changes when it next wakes up.
+      Press the button on the back to sync now.
+    </Trans>
+  );
 }
 
 export default function SettingsDevicesDetail() {

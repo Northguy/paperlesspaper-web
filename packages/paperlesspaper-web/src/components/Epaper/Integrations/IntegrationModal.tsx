@@ -50,6 +50,7 @@ export default function IntegrationModal({
   beforeFrameSelection,
   isLoadingImageData,
   onRequestCloseOverride,
+  onRequestSubmitOverride,
   open = true,
   inline = false,
   modalKind,
@@ -299,7 +300,7 @@ export default function IntegrationModal({
                   );
               }}
               onSecondarySubmit={openPreviewImage}
-              onRequestSubmit={() => openFrameSelection()}
+              onRequestSubmit={onRequestSubmitOverride || openFrameSelection}
               open={open}
               inPortal={false}
             >

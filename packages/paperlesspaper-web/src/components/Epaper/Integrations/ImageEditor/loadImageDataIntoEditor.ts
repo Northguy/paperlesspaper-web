@@ -153,6 +153,9 @@ const loadCanvasFromJson = async ({
   fabricCanvas: any;
   data: unknown;
 }) => {
+  if (data === undefined || data === null || data === "") {
+    throw new Error("No editable canvas data returned");
+  }
   const { json: safeJson, replacedBlobCount } = sanitizeLegacyFabricJson(data);
 
   if (replacedBlobCount > 0) {

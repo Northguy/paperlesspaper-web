@@ -54,6 +54,23 @@ describe("device update schedule cronjob", () => {
     vi.clearAllMocks();
   });
 
+  it.each([
+    ["Europe/Berlin", "20260601", "2026-06-01T06:00:00Z"],
+    ["Europe/Berlin", "20261201", "2026-12-01T07:00:00Z"],
+    ["America/New_York", "20260601", "2026-06-01T12:00:00Z"],
+    ["Asia/Tokyo", "20260602", "2026-06-01T23:00:00Z"],
+  ])("keeps the 08:00 window in %s on %s independent of server timezone", async (timezone, day, expected) => {
+    const { getAllowedIntervals } = await import("../../src/cronjobs/deviceUpdateSchedule.cronjob");
+    const start = new Date(expected);
+    const intervals = getAllowedIntervals({
+      windows: [{ durationMinutes: 30, rrule: `DTSTART;TZID=${timezone}:${day}T080000\nRRULE:FREQ=DAILY` }],
+      rangeStart: new Date(start.getTime() - 5 * 60000),
+      rangeEnd: new Date(start.getTime() + 60 * 60000),
+      timezone,
+    });
+    expect(intervals.map(interval => interval.start.toISOString())).toEqual([start.toISOString()]);
+  });
+
   it("restores normal sleep time when the wakeup is inside an allowed window", async () => {
     const { getDeviceUpdateScheduleDecision } = await import(
       "../../src/cronjobs/deviceUpdateSchedule.cronjob"

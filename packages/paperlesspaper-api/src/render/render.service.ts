@@ -341,12 +341,15 @@ const generateImageFromUrl = async ({
       }),
     );
 
-    await measure("navigationMs", () =>
+    const navigationResponse = await measure("navigationMs", () =>
       page!.goto(urlLocal, {
         waitUntil: "domcontentloaded",
         timeout: 15000,
       }),
     );
+    if (navigationResponse && !navigationResponse.ok()) {
+      throw new Error(`Render page returned HTTP ${navigationResponse.status()}`);
+    }
     await measure("adBlockMs", () => adBlock(page!));
     //console.log('AdBlock applied');
 
@@ -513,6 +516,11 @@ const generateImageFromUrl = async ({
       }),
     )) as PuppeteerRenderDiagnostics["pageState"];
 
+    // Keep the previous image when an integration never finishes loading.
+    if (readiness.outcome === "timeout" || pageState.status === "loading") {
+      throw new Error("Render page did not finish loading");
+    }
+
     //console.log('render finished:', scroll);
     if (css) {
       await measure("customCssMs", () =>
@@ -629,6 +637,29 @@ const resizeImageToDeviceSize = async ({
   const size = getDeviceSize({ kind, orientation });
   const resized = await resizeImage({ buffer, size });
   return { buffer: resized.buffer, size };
+};
+
+const prepareStoredImageForDevice = async ({
+  buffer,
+  bufferOriginal,
+  kind,
+  orientation = "portrait",
+}: Omit<ResizeImageToDeviceSizeOptions, "buffer"> & {
+  buffer: Buffer | null;
+  bufferOriginal: Buffer;
+}) => {
+  const size = getDeviceSize({ kind, orientation });
+  const image = buffer ? await loadImage(buffer) : null;
+  // Dithering rotates both orientations into the panel's native dimensions.
+  const panelSize = getDeviceSize({ kind, orientation: "landscape" });
+  if (buffer && image?.width === panelSize.width && image.height === panelSize.height) {
+    return { buffer, bufferOriginal };
+  }
+
+  // Resize the undithered source, never the already processed device image.
+  const resized = await resizeImage({ buffer: bufferOriginal, size });
+  const dithered = await ditherImage({ buffer: resized.buffer, size });
+  return { buffer: dithered.buffer, bufferOriginal: resized.buffer };
 };
 
 const resolveDitherSize = async (
@@ -750,5 +781,6 @@ const dither = async (
 export default {
   generateImageFromUrl,
   resizeImageToDeviceSize,
+  prepareStoredImageForDevice,
   ditherImage,
 };

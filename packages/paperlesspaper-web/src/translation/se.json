@@ -14,5 +14,13 @@
   "A consistent filled collection of food and drink symbols.": "En enhetlig fylld samling symboler för mat och dryck.",
   "Compact colorful icons for objects, places, and activities.": "Kompakta färgglada ikoner för föremål, platser och aktiviteter.",
   "Recognizable landmarks and destinations from around the world.": "Välkända landmärken och resmål från hela världen.",
-  "Expressive emoji for people, reactions, objects, and activities.": "Uttrycksfulla emojier för människor, reaktioner, föremål och aktiviteter."
+  "Expressive emoji for people, reactions, objects, and activities.": "Uttrycksfulla emojier för människor, reaktioner, föremål och aktiviteter.",
+  "Next Image": "Nästa bild",
+  "Select picture frame": "Välj fotoram",
+  "Upload failed": "Uppladdningen misslyckades",
+  "Some images could not be uploaded. Please try again. Successfully uploaded images have been removed from this list.": "Vissa bilder kunde inte laddas upp. Försök igen. Bilder som har laddats upp har tagits bort från listan.",
+  "Yes": "Ja",
+  "No": "Nej",
+  "Settings saved. Your frame will receive the changes when it next wakes up. Press the button on the back to sync now.": "Inställningarna har sparats. Din fotoram får ändringarna nästa gång den vaknar. Tryck på knappen på baksidan för att synkronisera nu.",
+  "PRINTER_API_KEY_STORED": "Kopiera och spara den här API-nyckeln säkert nu. Av säkerhetsskäl kanske du inte kan se den igen. Du kan hantera nycklar i dina <accountLink>kontoinställningar</accountLink>."
 }

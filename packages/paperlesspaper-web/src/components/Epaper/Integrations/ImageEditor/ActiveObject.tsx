@@ -4,7 +4,11 @@ import DeleteCurrent from "./DeleteCurrent";
 import styles from "./activeObject.module.scss";
 import EditorButton from "./EditorButton";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faArrowUp, faArrowDown } from "@fortawesome/pro-solid-svg-icons";
+import {
+  faArrowUp,
+  faArrowDown,
+  faRotate,
+} from "@fortawesome/pro-solid-svg-icons";
 import { Trans } from "react-i18next";
 import { useImageEditorContext } from "./ImageEditor";
 
@@ -61,7 +65,13 @@ export default function ActiveObject({ children, type }: any) {
           [styles.atEnd]: isAtEnd,
         })}
       >
-        {/* activeObject?.type */}
+        <EditorButton
+          id="rotateScreen"
+          onClick={imageEditorTools.rotateScreen}
+          kind="secondary"
+          text={<Trans>Rotate</Trans>}
+          icon={<FontAwesomeIcon icon={faRotate} />}
+        />
         {children}
         {imageEditorTools.activeObject?.type && (
           <>

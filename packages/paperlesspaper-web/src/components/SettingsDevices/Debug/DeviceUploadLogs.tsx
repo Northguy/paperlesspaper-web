@@ -108,9 +108,14 @@ const formatReadiness = (render?: DeviceUploadLog["render"]) => {
     return `website-has-loaded (${duration})`;
   }
   if (readiness.outcome === "timeout") {
-    return `timeout after ${formatDuration(readiness.timeoutMs)}`;
+    return (
+      <Trans
+        i18nKey="Timeout after {{duration}}"
+        values={{ duration: formatDuration(readiness.timeoutMs) }}
+      />
+    );
   }
-  return `legacy delay (${duration})`;
+  return <Trans i18nKey="Legacy delay ({{duration}})" values={{ duration }} />;
 };
 
 const timingLabels: Record<string, string> = {
@@ -152,7 +157,7 @@ const pipelineTimingOrder = Object.keys(pipelineTimingLabels);
 
 const formatBoolean = (value?: boolean | null) => {
   if (value === undefined || value === null) return "n/a";
-  return value ? "yes" : "no";
+  return value ? <Trans>Yes</Trans> : <Trans>No</Trans>;
 };
 
 function RenderLoadingIndicators({
@@ -181,60 +186,84 @@ function RenderLoadingIndicators({
         <Trans>Loading indicators</Trans> ({timings.length})
       </summary>
       <ul>
-        <li>Render outcome: {render.outcome || "n/a"}</li>
         <li>
-          Viewport: {viewport?.width || "?"}×{viewport?.height || "?"} ·{" "}
-          {viewport?.orientation || "?"} · {viewport?.kind || "?"}
+          <Trans>Render outcome:</Trans> {render.outcome || "n/a"}
         </li>
-        <li>INIT payload sent: {formatBoolean(render.initPayloadSent)}</li>
         <li>
-          Legacy data payload sent:{" "}
+          <Trans>Viewport:</Trans> {viewport?.width || "?"}×
+          {viewport?.height || "?"} · {viewport?.orientation || "?"} ·{" "}
+          {viewport?.kind || "?"}
+        </li>
+        <li>
+          <Trans>INIT payload sent:</Trans>{" "}
+          {formatBoolean(render.initPayloadSent)}
+        </li>
+        <li>
+          <Trans>Legacy data payload sent:</Trans>{" "}
           {formatBoolean(render.legacyDataPayloadSent)}
         </li>
-        <li>Network idle: {render.networkIdle?.outcome || "n/a"}</li>
         <li>
-          Readiness protocol detected:{" "}
+          <Trans>Network idle:</Trans> {render.networkIdle?.outcome || "n/a"}
+        </li>
+        <li>
+          <Trans>Readiness protocol detected:</Trans>{" "}
           {formatBoolean(readiness?.protocolDetected)}
         </li>
         <li>
-          Loading marker before INIT:{" "}
+          <Trans>Loading marker before INIT:</Trans>{" "}
           {formatBoolean(readiness?.loadingElementDetectedBeforeInit)}
         </li>
         <li>
-          Loaded marker before INIT:{" "}
+          <Trans>Loaded marker before INIT:</Trans>{" "}
           {formatBoolean(readiness?.loadedElementDetectedBeforeInit)}
         </li>
         <li>
-          Loading marker after INIT:{" "}
+          <Trans>Loading marker after INIT:</Trans>{" "}
           {formatBoolean(readiness?.loadingElementDetectedAfterInit)}
         </li>
         <li>
-          Loaded marker after INIT:{" "}
+          <Trans>Loaded marker after INIT:</Trans>{" "}
           {formatBoolean(readiness?.loadedElementDetectedAfterInit)}
         </li>
         <li>
-          website-has-loaded detected:{" "}
+          <Trans>website-has-loaded detected:</Trans>{" "}
           {formatBoolean(readiness?.websiteHasLoadedDetected)}
         </li>
-        <li>Readiness outcome: {formatReadiness(render)}</li>
-        <li>Final page state: {render.pageState?.status || "n/a"}</li>
         <li>
-          Error element present:{" "}
+          <Trans>Readiness outcome:</Trans> {formatReadiness(render)}
+        </li>
+        <li>
+          <Trans>Final page state:</Trans> {render.pageState?.status || "n/a"}
+        </li>
+        <li>
+          <Trans>Error element present:</Trans>{" "}
           {formatBoolean(render.pageState?.hasErrorElement)}
         </li>
         {render.pageState?.errorText && (
-          <li>Page error: {render.pageState.errorText}</li>
+          <li>
+            <Trans>Page error:</Trans> {render.pageState.errorText}
+          </li>
         )}
         {render.networkIdle?.error?.message && (
-          <li>Network-idle error: {render.networkIdle.error.message}</li>
+          <li>
+            <Trans>Network-idle error:</Trans>{" "}
+            {render.networkIdle.error.message}
+          </li>
         )}
         {readiness?.error?.message && (
-          <li>Readiness error: {readiness.error.message}</li>
+          <li>
+            <Trans>Readiness error:</Trans> {readiness.error.message}
+          </li>
         )}
-        {render.error?.message && <li>Render error: {render.error.message}</li>}
+        {render.error?.message && (
+          <li>
+            <Trans>Render error:</Trans> {render.error.message}
+          </li>
+        )}
         {timings.map(([key, durationMs]) => (
           <li key={key}>
-            {timingLabels[key] || key}: {formatDuration(durationMs)}
+            {timingLabels[key] ? <Trans>{timingLabels[key]}</Trans> : key}:{" "}
+            {formatDuration(durationMs)}
           </li>
         ))}
       </ul>
@@ -269,19 +298,29 @@ function PipelineLoadingIndicators({
         {timings.length + stageTimings.length})
       </summary>
       <ul>
-        <li>Source: {pipeline?.source || "n/a"}</li>
         <li>
-          Device-shadow settings:{" "}
+          <Trans>Source:</Trans> {pipeline?.source || "n/a"}
+        </li>
+        <li>
+          <Trans>Device-shadow settings:</Trans>{" "}
           {pipeline?.deviceShadowSettings?.outcome || "n/a"}
         </li>
         {timings.map(([key, durationMs]) => (
           <li key={key}>
-            {pipelineTimingLabels[key] || key}: {formatDuration(durationMs)}
+            {pipelineTimingLabels[key] ? (
+              <Trans>{pipelineTimingLabels[key]}</Trans>
+            ) : (
+              key
+            )}
+            : {formatDuration(durationMs)}
           </li>
         ))}
         {stageTimings.map(([key, stage]) => (
           <li key={`stage-${key}`}>
-            Upload stage “{key}” ({stage.status || "n/a"}):{" "}
+            <Trans
+              i18nKey="Upload stage {{stage}} ({{status}}):"
+              values={{ stage: key, status: stage.status || "n/a" }}
+            />{" "}
             {formatDuration(stage.durationMs)}
           </li>
         ))}

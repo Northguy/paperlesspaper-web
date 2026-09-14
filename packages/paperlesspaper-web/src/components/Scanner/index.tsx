@@ -62,7 +62,7 @@ export default function Scanner({
       if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
         startReader();
       } else {
-        alert("getUserMedia() is not supported by your browser");
+        alert(i18next.t("Your browser does not support camera access."));
       }
     } else if (open === false) {
       console.log("stop reader");

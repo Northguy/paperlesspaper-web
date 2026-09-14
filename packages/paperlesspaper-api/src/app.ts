@@ -20,6 +20,7 @@ import {
 
 import routes from "./routes/v1/index";
 import { bullBoardRouter } from "./cronjobs/bullBoard.service";
+import { isPapersWorkerHealthy } from "./cronjobs/bullmq.service";
 import z from "zod";
 
 const { OpenApiGeneratorV3 } = ztoapi;
@@ -89,7 +90,13 @@ app.use("/v1", routes);
 
 const healthMessage = `paperlesspaper API v${process.env.npm_package_version} env: ${config.env}`;
 app.get("/", (_req, res) => res.send(healthMessage));
-app.get("/health", (_req, res) => res.send(healthMessage));
+app.get("/health", (_req, res) => {
+  if (!isPapersWorkerHealthy()) {
+    res.status(503).send("Papers worker is not healthy");
+    return;
+  }
+  res.send(healthMessage);
+});
 
 app.use((_req, _res, next: NextFunction) => {
   next(new ApiError(httpStatus.NOT_FOUND, "Not found"));

@@ -6,7 +6,6 @@ import useEditor from "../Integrations/ImageEditor/useEditor";
 
 export default function LanguageSelector({ allowedLanguages }: any) {
   const { t, i18n } = useTranslation();
-  console.log("LanguageSelector -> language", i18n);
 
   const language = i18n.language;
 
@@ -20,6 +19,10 @@ export default function LanguageSelector({ allowedLanguages }: any) {
     {
       value: "en",
       text: t("English"),
+    },
+    {
+      value: "nl",
+      text: t("Dutch", { defaultValue: "Nederlands" }),
     },
     {
       value: "fr",

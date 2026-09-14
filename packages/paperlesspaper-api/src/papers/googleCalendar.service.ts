@@ -1,5 +1,5 @@
 import axios, { AxiosError } from 'axios';
-import { addDays } from 'date-fns';
+import moment from 'moment-timezone';
 import { google } from 'googleapis';
 import type { calendar_v3 } from 'googleapis';
 import { isPast } from 'date-fns';
@@ -241,8 +241,8 @@ export async function getCalendarEvents(paper: any): Promise<any> {
 
   await refreshAccessTokenIfNeeded();
 
-  if (!accessToken || !refreshToken) {
-    console.error('Google Calendar access token or refresh token not found in paper meta.');
+  if (!accessToken) {
+    console.error('Google Calendar access token not found in paper meta.');
     return {
       calendars: [],
       events: [],
@@ -306,14 +306,21 @@ export async function getCalendarEvents(paper: any): Promise<any> {
 
   const configuredDayRange = Number(getCalendarSetting(paper, 'dayRange'));
   const safeDayRange = Number.isFinite(configuredDayRange) ? Math.round(configuredDayRange) : DEFAULT_DAY_RANGE;
-  const clampedDayRange = Math.max(1, Math.min(MAX_DAY_RANGE, safeDayRange));
-  const startDate = new Date();
-  startDate.setHours(0, 0, 0, 0);
+  const highlightToday = ['true', '1', 'yes', 'on'].includes(
+    String(getCalendarSetting(paper, 'highlightToday')).toLowerCase().trim(),
+  );
+  const clampedDayRange = highlightToday ? 1 : Math.max(1, Math.min(MAX_DAY_RANGE, safeDayRange));
+  const configuredTimezone = paper.kind === 'plugin'
+    ? paper.meta?.pluginManifest?.timezone
+    : paper.meta?.timezone;
+  const startDate = (typeof configuredTimezone === 'string' && moment.tz.zone(configuredTimezone)
+    ? moment.tz(configuredTimezone)
+    : moment()).startOf('day');
   const configuredMaxEvents = Number(getCalendarSetting(paper, 'maxEvents'));
   const safeMaxEvents = Number.isFinite(configuredMaxEvents) ? Math.round(configuredMaxEvents) : DEFAULT_MAX_EVENTS;
   const clampedMaxEvents = Math.max(1, Math.min(MAX_EVENTS_LIMIT, safeMaxEvents));
-  const endDate = addDays(startDate, Math.max(clampedDayRange - 1, 0));
-  endDate.setHours(23, 59, 59, 999);
+  // Google uses an exclusive end; adding calendar days preserves DST boundaries.
+  const endDate = startDate.clone().add(clampedDayRange, 'days');
   const startOfDay = startDate.toISOString();
   const endOfDay = endDate.toISOString();
 

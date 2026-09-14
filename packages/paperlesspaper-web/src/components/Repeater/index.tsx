@@ -80,7 +80,7 @@ export function RepeaterItem({ className, children, image }: any) {
 export function RepeaterItemImage({ children }: any) {
   return (
     <div className={styles.repeaterItemImage}>
-      {children ? children : "no title"}
+      {children ? children : <Trans>No title</Trans>}
     </div>
   );
 }
@@ -88,7 +88,7 @@ export function RepeaterItemImage({ children }: any) {
 export function RepeaterItemTitle({ children }: any) {
   return (
     <div className={styles.repeaterItemTitle}>
-      {children ? children : "no title"}
+      {children ? children : <Trans>No title</Trans>}
     </div>
   );
 }

@@ -14,5 +14,13 @@
   "A consistent filled collection of food and drink symbols.": "Ucelená sbírka plných symbolů jídla a pití.",
   "Compact colorful icons for objects, places, and activities.": "Kompaktní barevné ikony pro předměty, místa a aktivity.",
   "Recognizable landmarks and destinations from around the world.": "Známé památky a cíle z celého světa.",
-  "Expressive emoji for people, reactions, objects, and activities.": "Výrazné emoji pro lidi, reakce, předměty a aktivity."
+  "Expressive emoji for people, reactions, objects, and activities.": "Výrazné emoji pro lidi, reakce, předměty a aktivity.",
+  "Next Image": "Další obrázek",
+  "Select picture frame": "Vyberte fotorámeček",
+  "Upload failed": "Nahrávání se nezdařilo",
+  "Some images could not be uploaded. Please try again. Successfully uploaded images have been removed from this list.": "Některé obrázky se nepodařilo nahrát. Zkuste to prosím znovu. Úspěšně nahrané obrázky byly z tohoto seznamu odstraněny.",
+  "Yes": "Ano",
+  "No": "Ne",
+  "Settings saved. Your frame will receive the changes when it next wakes up. Press the button on the back to sync now.": "Nastavení bylo uloženo. Fotorámeček obdrží změny při příštím probuzení. Pro okamžitou synchronizaci stiskněte tlačítko na zadní straně.",
+  "PRINTER_API_KEY_STORED": "Zkopírujte a bezpečně uložte tento API klíč nyní. Z bezpečnostních důvodů ho možná nebudete moci znovu zobrazit. Klíče můžete spravovat ve vašem <accountLink>nastavení účtu</accountLink>."
 }

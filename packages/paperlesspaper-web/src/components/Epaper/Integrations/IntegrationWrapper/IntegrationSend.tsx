@@ -6,7 +6,7 @@ import MultiCheckboxWrapper from "components/MultiCheckbox/MultiCheckboxWrapper"
 import { devicesApi } from "ducks/devices";
 import { papersApi } from "ducks/ePaper/papersApi";
 import { deviceByKind } from "helpers/devices/deviceList";
-import formatDistanceShort from "helpers/formatDistanceShort";
+import NextSyncNotice from "./NextSyncNotice";
 import { useActiveUserDevice } from "helpers/useUsers";
 import { useLocaleDate } from "@internetderdinge/web";
 import React from "react";
@@ -61,24 +61,6 @@ export default function IntegrationSend({
 
   const nextDeviceSyncValue =
     activeUserDevice.data?.deviceStatus?.nextDeviceSync;
-  const nextDeviceSyncNumber =
-    typeof nextDeviceSyncValue === "number"
-      ? nextDeviceSyncValue
-      : Number(nextDeviceSyncValue);
-  const nextDeviceSyncDate = Number.isFinite(nextDeviceSyncNumber)
-    ? new Date(
-        nextDeviceSyncNumber < 1_000_000_000_000
-          ? nextDeviceSyncNumber * 1000
-          : nextDeviceSyncNumber,
-      )
-    : nextDeviceSyncValue
-      ? new Date(nextDeviceSyncValue)
-      : null;
-  const isNextSyncValid =
-    !!nextDeviceSyncDate && !isNaN(nextDeviceSyncDate.getTime());
-  const nextSyncDistance = isNextSyncValid
-    ? formatDistanceShort(nextDeviceSyncDate, new Date(), localeDate.locale)
-    : null;
 
   const devices = devicesApi.useGetAllDevicesQuery(
     { organizationId: organization },
@@ -204,15 +186,11 @@ export default function IntegrationSend({
         kind="info"
         className={styles.nextSyncCallout}
         title={
-          <>
-            {nextSyncDistance ? (
-              <Trans values={{ nextSync: nextSyncDistance }}>
-                Next sync in {{ nextSync: nextSyncDistance }}.
-              </Trans>
-            ) : (
-              <Trans>The next sync will happen automatically.</Trans>
-            )}
-          </>
+          <NextSyncNotice
+            nextDeviceSync={nextDeviceSyncValue}
+            active={isFrameSelectionOpen}
+            locale={localeDate.locale}
+          />
         }
       >
         <Trans

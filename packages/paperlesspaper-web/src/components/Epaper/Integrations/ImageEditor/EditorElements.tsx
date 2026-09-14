@@ -1,7 +1,6 @@
 import {
   faPen,
   faQrcode,
-  faRotate,
   faSquare,
   faText,
 } from "@fortawesome/pro-solid-svg-icons";
@@ -58,13 +57,6 @@ export default function EditorElements() {
     <>
       <AddImage />
       <ArtBrowser />
-      <EditorButton
-        id="rotateScreen"
-        onClick={imageEditorTools.rotateScreen}
-        kind="secondary"
-        text={<Trans>Rotate</Trans>}
-        icon={<FontAwesomeIcon icon={faRotate} />}
-      />
       <EditorButton
         id="toggleDrawingMode"
         text={<Trans>Draw</Trans>}

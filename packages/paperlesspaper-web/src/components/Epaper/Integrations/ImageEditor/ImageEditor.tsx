@@ -27,6 +27,7 @@ export type ImageEditorExportData = {
   dataDirect: Blob;
   dataOriginal: Blob;
   dataEditable: string;
+  meta: Record<string, unknown>;
 };
 
 export type ImageEditorHandle = {
@@ -149,7 +150,7 @@ const ImageEditor = React.forwardRef<
   const [previewImage, setPreviewImage] = React.useState(false);
   const [previewDitheringSettings, setPreviewDitheringSettings] =
     React.useState<PreviewDitheringSettings>(
-      DEFAULT_PREVIEW_DITHERING_SETTINGS,
+      DEFAULT_PREVIEW_DITHERING_SETTINGS
     );
   const [previewDebugInfo, setPreviewDebugInfo] =
     React.useState<PreviewDitheringDebugInfo | null>(null);
@@ -160,8 +161,7 @@ const ImageEditor = React.forwardRef<
   const previewDitheringSettingsOwnerRef = React.useRef<string | null>(null);
 
   React.useEffect(() => {
-    const settingsOwnerId =
-      store.urlId === "new" ? "new" : store.entryData?.id;
+    const settingsOwnerId = store.urlId === "new" ? "new" : store.entryData?.id;
 
     if (
       !settingsOwnerId ||
@@ -172,8 +172,8 @@ const ImageEditor = React.forwardRef<
 
     setPreviewDitheringSettings(
       restorePreviewDitheringSettings(
-        store.entryData?.meta?.[DITHERING_SETTINGS_META_KEY],
-      ),
+        store.entryData?.meta?.[DITHERING_SETTINGS_META_KEY]
+      )
     );
     previewDitheringSettingsOwnerRef.current = settingsOwnerId;
   }, [store.entryData?.id, store.entryData?.meta, store.urlId]);
@@ -227,7 +227,7 @@ const ImageEditor = React.forwardRef<
 
     const recordContinueTiming = (name: string, startedAt: number) => {
       continueTimingsMs[name] = roundTimingMs(
-        getEditorPerformanceNow() - startedAt,
+        getEditorPerformanceNow() - startedAt
       );
     };
 
@@ -239,18 +239,18 @@ const ImageEditor = React.forwardRef<
 
       stepStartedAt = getEditorPerformanceNow();
       const blob = await new Promise<Blob | null>((resolve) =>
-        renderCanvasRef.current.toBlob((b) => resolve(b)),
+        renderCanvasRef.current.toBlob((b) => resolve(b))
       );
       recordContinueTiming("continueRenderBlobEncoding", stepStartedAt);
 
       stepStartedAt = getEditorPerformanceNow();
       const blobPreview = await new Promise<Blob | null>((resolve) =>
-        previewCanvasRef.current.toBlob((b) => resolve(b)),
+        previewCanvasRef.current.toBlob((b) => resolve(b))
       );
       recordContinueTiming("continuePreviewBlobEncoding", stepStartedAt);
       recordContinueTiming(
         "continueRenderExportPreviewTotal",
-        totalRenderExportPreviewStartedAt,
+        totalRenderExportPreviewStartedAt
       );
 
       return {
@@ -294,8 +294,8 @@ const ImageEditor = React.forwardRef<
     store.form.setValue(
       `meta.${DITHERING_SETTINGS_META_KEY}`,
       serializePreviewDitheringSettings(
-        continuePreviewDebugInfo?.settings || previewDitheringSettings,
-      ),
+        continuePreviewDebugInfo?.settings || previewDitheringSettings
+      )
     );
 
     imageEditorTools.resizeCanvas({ source: "submitImage" });
@@ -304,6 +304,7 @@ const ImageEditor = React.forwardRef<
       dataDirect: rendered.blob,
       dataOriginal: rendered.blobPreview,
       dataEditable,
+      meta: { ...store.form.getValues("meta") },
     };
   }, [imageEditorTools, previewDitheringSettings, store]);
 
@@ -312,7 +313,7 @@ const ImageEditor = React.forwardRef<
     () => ({
       exportImageData: submitImage,
     }),
-    [submitImage],
+    [submitImage]
   );
 
   return (
@@ -353,6 +354,9 @@ const ImageEditor = React.forwardRef<
         isLoadingImageData={imageEditorTools.isLoadingImageData}
         setIsLoadingImageData={imageEditorTools.setIsLoadingImageData}
         onRequestCloseOverride={onRequestCloseOverride}
+        onRequestSubmitOverride={
+          onRequestCloseOverride ? () => onRequestCloseOverride() : undefined
+        }
         open={open}
         inline={inline}
         // passiveModal

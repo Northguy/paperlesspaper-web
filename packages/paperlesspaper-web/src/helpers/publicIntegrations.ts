@@ -5,7 +5,7 @@ const DEFAULT_INTEGRATION_CONFIG_BASE_URL =
   "https://integrations.paperlesspaper.de";
 const PREVIEW_ICON_TRANSFORM = "c_limit,w_128,h_128,f_auto,q_auto";
 const PUBLIC_INTEGRATIONS_CACHE_KEY_PREFIX =
-  "paperlesspaper.publicIntegrations";
+  "paperlesspaper.publicIntegrations.v2";
 
 export type PublicIntegrationDocument = {
   id?: string;
@@ -56,7 +56,7 @@ export type AppIntegration = {
 const trimTrailingSlash = (value: string) => value.replace(/\/$/, "");
 
 export const normalizePublicIntegrationsLocale = (locale?: string) =>
-  (locale || "de").split("-")[0];
+  (locale || "en").toLowerCase().split(/[-_]/)[0];
 
 const getPublicBackendUrl = () =>
   trimTrailingSlash(DEFAULT_PUBLIC_BACKEND_URL);
@@ -124,6 +124,8 @@ export function getPublicIntegrationsUrl(locale?: string) {
   const search = new URLSearchParams({
     limit: "1000",
     locale: normalizePublicIntegrationsLocale(locale),
+    // The catalogue otherwise falls back to German for untranslated fields.
+    "fallback-locale": "en",
     draft: "false",
   });
 

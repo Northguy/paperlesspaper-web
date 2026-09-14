@@ -121,14 +121,18 @@ export const getAllowedIntervals = ({
 
     if (window.rrule) {
       try {
-        const rule = rrulestr(window.rrule);
-        const expansionStart = new Date(rangeStart.getTime() - durationMs);
-        const expansionEnd = new Date(rangeEnd.getTime() + durationMs);
+        const recurrenceTimezone = window.rrule.match(/DTSTART;TZID=([^:;\r\n]+)/i)?.[1];
+        // Expand wall-clock values without rrule's host-timezone adjustment,
+        // then convert them to instants exactly once.
+        const rule = rrulestr(window.rrule.replace(/;TZID=[^:;\r\n]+/gi, ""));
+        const timezonePaddingMs = recurrenceTimezone ? 24 * 60 * 60 * 1000 : 0;
+        const expansionStart = new Date(rangeStart.getTime() - durationMs - timezonePaddingMs);
+        const expansionEnd = new Date(rangeEnd.getTime() + durationMs + timezonePaddingMs);
         return rule
           .between(expansionStart, expansionEnd, true)
           .map((occurrence: Date) => {
-            const start = window.rrule?.includes("TZID=")
-              ? rruleDateToInstant(occurrence, timezone)
+            const start = recurrenceTimezone
+              ? rruleDateToInstant(occurrence, recurrenceTimezone)
               : occurrence;
             return {
               start,

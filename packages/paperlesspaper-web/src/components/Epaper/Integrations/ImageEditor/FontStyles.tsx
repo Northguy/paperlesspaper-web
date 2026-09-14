@@ -32,7 +32,7 @@ function ModalComponent() {
           id={i}
           key={i}
           style={d.settings}
-          text={d.name}
+          text={<Trans context="font">{d.name}</Trans>}
           onClick={() => changeFontStyle(d.settings)}
           icon={d.icon}
         />

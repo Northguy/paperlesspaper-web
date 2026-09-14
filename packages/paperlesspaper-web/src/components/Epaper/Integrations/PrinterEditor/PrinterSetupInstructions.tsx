@@ -30,11 +30,10 @@ export default function PrinterSetupInstructions() {
   ) : hasGeneratedToken ? (
     <>
       <Callout kind="success" title={<Trans>Your API key is ready</Trans>}>
-        <Trans>
-          Copy and store this API key securely now. For security reasons, you
-          may not be able to view it again. You can manage keys in your{" "}
-          <Link to="/account">account settings</Link>.
-        </Trans>
+        <Trans
+          i18nKey="PRINTER_API_KEY_STORED"
+          components={{ accountLink: <Link to="/account" /> }}
+        />
       </Callout>
 
       <div className={styles.tokenField}>

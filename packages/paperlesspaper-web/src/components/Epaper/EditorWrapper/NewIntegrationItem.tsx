@@ -90,7 +90,7 @@ export default function NewIntegrationItem({
           </span>
           {statusTagLabel && (
             <Tag className={styles.beta} type={statusTagLabel.kind}>
-              {statusTagLabel.label}
+              <Trans>{statusTagLabel.label}</Trans>
             </Tag>
           )}
         </div>

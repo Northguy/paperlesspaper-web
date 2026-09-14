@@ -30,6 +30,7 @@ import {
 import styles from "./imageAdjustments.module.scss";
 import ValueChanger from "./ValueChanger";
 import Clarity from "./Clarity";
+import useEditor from "./useEditor";
 
 const dynamicRangeCompressionModes: EpdImageAdjustmentSettings["dynamicRangeCompressionMode"][] =
   ["off", "display", "auto"];
@@ -941,6 +942,17 @@ function AutoAdjustmentsButton() {
 
 export default function ImageAdjustments() {
   const { fabricRef }: any = useImageEditorContext();
+  const { clearEditorDetails } = useEditor();
+  const resetAdjustments = () => {
+    // Close any slider first so its pending change cannot overwrite the reset.
+    clearEditorDetails?.();
+    const img = getActiveImage(fabricRef);
+    if (!img) return;
+    useCanvas2dFilterBackend();
+    applySettingsToImage(img, DEFAULT_IMAGE_ADJUSTMENT_SETTINGS);
+    fabricRef.current?.requestRenderAll?.();
+    fabricRef.current?.fire?.("object:modified", { target: img, e: {} });
+  };
 
   useEffect(() => {
     registerEpdImageAdjustmentsIfNeeded();
@@ -950,6 +962,13 @@ export default function ImageAdjustments() {
   return (
     <>
       <AutoAdjustmentsButton />
+      <EditorButton
+        id="reset-image-adjustments"
+        kind="secondary"
+        text={<Trans>Reset</Trans>}
+        onClick={resetAdjustments}
+        icon={<FontAwesomeIcon icon={faRotate} />}
+      />
       <EditorButton
         id="image-adjustments-exposure"
         kind="secondary"
