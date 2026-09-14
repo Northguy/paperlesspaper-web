@@ -11,7 +11,7 @@ export function useActiveDevice(activeDeviceId?: string) {
       : undefined;
 
   const data = devicesApi.useGetSingleDevicesQuery(activeDevice, {
-    skip: activeDevice === undefined,
+    skip: !activeDevice || activeDevice === "new",
   });
 
   return data;

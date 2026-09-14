@@ -10,7 +10,7 @@ import { Controller } from "react-hook-form";
 export default function UserSelect({
   control,
   name,
-  labelText = "Patient",
+  labelText,
   helperText,
   filterData,
 }: any) {
@@ -38,7 +38,7 @@ export default function UserSelect({
 
         return (
           <Select
-            labelText={labelText}
+            labelText={labelText ?? t("Patient")}
             helperText={helperText}
             {...field}
             className={styles.userSelect}
@@ -51,7 +51,7 @@ export default function UserSelect({
                 <SelectItem
                   disabled={e.disabled}
                   key={e.id}
-                  text={text !== null ? text : "Unnamed user"}
+                  text={text !== null ? text : t("Unnamed user")}
                   value={e.id}
                 />
               );

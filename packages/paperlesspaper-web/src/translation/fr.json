@@ -14,5 +14,13 @@
   "A consistent filled collection of food and drink symbols.": "Une collection cohérente de symboles pleins pour la nourriture et les boissons.",
   "Compact colorful icons for objects, places, and activities.": "Des icônes compactes et colorées pour les objets, lieux et activités.",
   "Recognizable landmarks and destinations from around the world.": "Des monuments et destinations reconnaissables du monde entier.",
-  "Expressive emoji for people, reactions, objects, and activities.": "Des emoji expressifs représentant des personnes, réactions, objets et activités."
+  "Expressive emoji for people, reactions, objects, and activities.": "Des emoji expressifs représentant des personnes, réactions, objets et activités.",
+  "Next Image": "Image suivante",
+  "Select picture frame": "Sélectionner un cadre photo",
+  "Upload failed": "Échec du téléversement",
+  "Some images could not be uploaded. Please try again. Successfully uploaded images have been removed from this list.": "Certaines images n’ont pas pu être téléversées. Veuillez réessayer. Les images téléversées avec succès ont été retirées de cette liste.",
+  "Yes": "Oui",
+  "No": "Non",
+  "Settings saved. Your frame will receive the changes when it next wakes up. Press the button on the back to sync now.": "Paramètres enregistrés. Votre cadre recevra les modifications à son prochain réveil. Appuyez sur le bouton au dos pour synchroniser maintenant.",
+  "PRINTER_API_KEY_STORED": "Copiez et stockez cette clé API en sécurité maintenant. Pour des raisons de sécurité, il se peut que vous ne puissiez pas la voir à nouveau. Vous pouvez gérer les clés dans vos <accountLink>paramètres de compte</accountLink>."
 }

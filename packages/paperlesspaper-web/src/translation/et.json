@@ -14,5 +14,13 @@
   "A consistent filled collection of food and drink symbols.": "Ühtne täidetud toidu- ja joogisümbolite kogu.",
   "Compact colorful icons for objects, places, and activities.": "Kompaktsed värvilised ikoonid esemete, kohtade ja tegevuste jaoks.",
   "Recognizable landmarks and destinations from around the world.": "Äratuntavad vaatamisväärsused ja sihtkohad kogu maailmast.",
-  "Expressive emoji for people, reactions, objects, and activities.": "Ilmekad emodžid inimeste, reaktsioonide, esemete ja tegevuste jaoks."
+  "Expressive emoji for people, reactions, objects, and activities.": "Ilmekad emodžid inimeste, reaktsioonide, esemete ja tegevuste jaoks.",
+  "Next Image": "Järgmine pilt",
+  "Select picture frame": "Vali pildiraam",
+  "Upload failed": "Üleslaadimine ebaõnnestus",
+  "Some images could not be uploaded. Please try again. Successfully uploaded images have been removed from this list.": "Mõnda pilti ei saanud üles laadida. Palun proovi uuesti. Edukalt üles laaditud pildid on sellest loendist eemaldatud.",
+  "Yes": "Jah",
+  "No": "Ei",
+  "Settings saved. Your frame will receive the changes when it next wakes up. Press the button on the back to sync now.": "Seaded salvestatud. Pildiraam saab muudatused järgmisel ärkamisel. Kohe sünkroonimiseks vajuta tagaküljel olevat nuppu.",
+  "PRINTER_API_KEY_STORED": "Salvesta see API võti kohe turvaliselt. Turvalisuse huvides ei pruugi sa seda hiljem uuesti näha. Võtmeid saad hallata oma <accountLink>konto seadetes</accountLink>."
 }

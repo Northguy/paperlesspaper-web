@@ -90,7 +90,56 @@ describe("iotdevice.service", () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
+  });
+
+  it("aborts a hung IoT request, records the failed stage, and allows the next upload", async () => {
+    const original = await sharp({
+      create: { width: 8, height: 8, channels: 3, background: "white" },
+    })
+      .png()
+      .toBuffer();
+    const service = await import("../../src/iotdevice/iotdevice.service");
+    let requestSignal: AbortSignal | undefined;
+    let requestStarted!: () => void;
+    const started = new Promise<void>((resolve) => {
+      requestStarted = resolve;
+    });
+    axiosMock.post.mockImplementationOnce((_url, _data, options) => {
+      requestSignal = options.signal;
+      requestStarted();
+      return new Promise(() => {});
+    });
+    vi.useFakeTimers();
+    const upload = service.uploadSingleImage({
+      deviceName: "device-1",
+      buffer: original,
+      id: "paper-1",
+    });
+    await started;
+    expect(saveDeviceUploadLogMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        stages: expect.objectContaining({
+          iotUploadRequest: { status: "started" },
+        }),
+      }),
+    );
+    await vi.advanceTimersByTimeAsync(60_000);
+    const result = await upload;
+    expect(requestSignal?.aborted).toBe(true);
+    expect(result.uploadFailed).toBe(true);
+    expect(axiosMock.put).not.toHaveBeenCalled();
+    expect(saveDeviceUploadLogMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ status: "failed" }),
+    );
+    vi.useRealTimers();
+    await service.uploadSingleImage({
+      deviceName: "device-1",
+      buffer: original,
+      id: "paper-1",
+    });
+    expect(axiosMock.put).toHaveBeenCalledOnce();
   });
 
   it("stores JPG originals, a temporary PNG original, and a thumbnail without changing the e-paper upload buffer", async () => {
@@ -187,8 +236,9 @@ describe("iotdevice.service", () => {
     const temporaryOriginalPng = uploadedByKey.get(
       "ePaperImages/paper-1original.png",
     )?.Body;
-    const temporaryOriginalMetadata =
-      await sharp(temporaryOriginalPng).metadata();
+    const temporaryOriginalMetadata = await sharp(
+      temporaryOriginalPng,
+    ).metadata();
     expect(temporaryOriginalMetadata.format).toBe("png");
     expect(Buffer.from(temporaryOriginalPng).equals(originalBuffer)).toBe(true);
 

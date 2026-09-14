@@ -445,7 +445,7 @@ export default function AccountPage() {
                   to="/admin"
                   icon={<FontAwesomeIcon icon={faScrewdriverWrench} />}
                 >
-                  Admin
+                  <Trans>Admin</Trans>
                 </ButtonRouter>
               </div>
             )}

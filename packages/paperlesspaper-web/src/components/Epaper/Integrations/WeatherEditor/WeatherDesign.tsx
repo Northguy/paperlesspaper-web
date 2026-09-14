@@ -75,7 +75,7 @@ const ModalComponent = () => {
       <TextInput
         labelText={<Trans>Location</Trans>}
         helperText={<Trans>Enter the location you want to display</Trans>}
-        placeholder="Berlin, Tokio, New York..."
+        placeholder={t("Berlin, Tokyo, New York...")}
         className={styles.input}
         {...form.register("meta.location")}
       />

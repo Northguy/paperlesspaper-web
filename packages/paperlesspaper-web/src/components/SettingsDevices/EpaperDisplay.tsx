@@ -119,7 +119,6 @@ export default function EpaperDisplay({ register }: any) {
         labelText={<Trans>Clear screen</Trans>}
         helperText={
           <Trans>
-            {" "}
             If do a refresh and clean before load picture (default:true)
           </Trans>
         }

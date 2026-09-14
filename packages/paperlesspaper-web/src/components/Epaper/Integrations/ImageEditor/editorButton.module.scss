@@ -2,6 +2,8 @@
 
 .editorButton {
   display: flex;
+  flex: 0 0 auto;
+  min-width: 4.5rem;
   flex-direction: column;
   text-align: center;
 

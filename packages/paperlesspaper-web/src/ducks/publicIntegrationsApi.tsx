@@ -101,6 +101,6 @@ export function usePublicIntegrations(locale?: string) {
 
   return {
     ...query,
-    data: query.data || cachedData,
+    data: query.currentData || cachedData,
   };
 }

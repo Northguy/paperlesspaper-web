@@ -1,6 +1,6 @@
 import React from "react";
 import { Button, Module, ModuleBody, Wrapper } from "@progressiveui/react";
-import { Trans } from "react-i18next";
+import { Trans, useTranslation } from "react-i18next";
 import {
   faStamp,
   faUser,
@@ -76,6 +76,7 @@ export function SettingsAdvancedLink({
 }
 
 export default function SettingsAdvanced() {
+  const { t } = useTranslation();
   const { organization: currentOrganzation } = useParams();
   const { data: currentOrganization } = useCurrentOrganization();
 
@@ -160,7 +161,7 @@ export default function SettingsAdvanced() {
     script.onload = function () {
       window.chatwootSDK.run({
         type: "expanded_bubble",
-        launcherTitle: "Chat with us",
+        launcherTitle: t("Chat with us"),
         websiteToken:
           import.meta.env.REACT_APP_CHATWOOT || "ErhRVgC985NqpKuC9YBGzGiU",
         baseUrl: CHATWOOT_BASE_URL,

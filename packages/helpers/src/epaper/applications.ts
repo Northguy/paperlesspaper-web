@@ -45,7 +45,7 @@ export const applications = [
     url: "https://apps.paperlesspaper.de/weather",
     settings: {
       location: {},
-      language: ["de", "en", "fr", "es", "it"],
+      language: ["de", "en", "nl", "fr", "es", "it"],
       kind: {},
       color: {},
       iconstyle: {},

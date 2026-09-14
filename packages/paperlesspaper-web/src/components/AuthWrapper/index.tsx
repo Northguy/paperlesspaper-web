@@ -1,4 +1,5 @@
 import React from "react";
+import { Trans } from "react-i18next";
 
 import styles from "./auth-wrapper.module.scss";
 import { useIsDesktop } from "@internetderdinge/web";
@@ -78,7 +79,7 @@ const AuthWrapper = ({
     customBack(props)
   ) : (
     <ButtonRouter {...props} kind="tertiary">
-      {backLinkText ? backLinkText : "Back to login"}
+      {backLinkText ? backLinkText : <Trans>Back to login</Trans>}
     </ButtonRouter>
   );
 

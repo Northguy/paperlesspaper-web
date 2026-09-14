@@ -240,7 +240,7 @@ export function QrCodeSettingsModal({
               onChange={(e) =>
                 form?.setValue?.(`${QR_DRAFT_PATH}.wifi.ssid`, e.target.value)
               }
-              placeholder="My WiFi"
+              placeholder={t("My WiFi")}
             />
           </div>
 

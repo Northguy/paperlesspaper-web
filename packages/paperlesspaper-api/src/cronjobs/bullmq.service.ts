@@ -14,6 +14,7 @@ import { addMessages } from "./addMessages.service";
 import { cronjobPapers } from "./papers.cronjob";
 import { cronjobDeviceUpdateSchedule } from "./deviceUpdateSchedule.cronjob";
 import { reconcileEveryOnQueue } from "./bullmq.schedulers";
+import { createPapersWatchdog } from "./papers.watchdog";
 
 type JobName =
   | "batteryCronjob"
@@ -156,12 +157,7 @@ const toJobResult = (job: Job) => ({
 });
 
 const getQueueForJob = (name: JobName) => {
-  if (
-    !bullMqEnabled ||
-    !queue ||
-    !papersQueue ||
-    !deviceUpdateScheduleQueue
-  ) {
+  if (!bullMqEnabled || !queue || !papersQueue || !deviceUpdateScheduleQueue) {
     throw new Error(
       "BullMQ is disabled. Configure REDIS_URL or REDIS_HOST/REDIS_PORT, or keep DISABLE_BULLMQ=true.",
     );
@@ -249,6 +245,30 @@ const worker = bullMqEnabled
     )
   : null;
 
+const papersWatchdog = createPapersWatchdog({
+  readLastFinishedAt: async () => {
+    const [completed, failed] = await Promise.all([
+      papersQueue!.getCompleted(0, 0),
+      papersQueue!.getFailed(0, 0),
+    ]);
+    return (
+      Math.max(completed[0]?.finishedOn || 0, failed[0]?.finishedOn || 0) ||
+      null
+    );
+  },
+  onUnhealthy: (error) => {
+    console.error("Papers watchdog restarting unhealthy API worker", error);
+    // Bound even error reporting: a wedged processor must actually die so it
+    // cannot continue uploading after its replacement starts processing jobs.
+    setTimeout(() => process.exit(1), 2_000);
+    Sentry.captureException(error, {
+      level: "fatal",
+      tags: { component: "papers-watchdog" },
+    });
+    void Sentry.flush(1_500).catch(() => undefined);
+  },
+});
+
 const papersWorker = bullMqEnabled
   ? new Worker(
       papersQueueName,
@@ -256,7 +276,9 @@ const papersWorker = bullMqEnabled
         console.log(`Processing papers job ${job.id} of type ${job.name}`);
 
         if (job.name === "papersCronjob") {
-          const data = await cronjobPapers(job);
+          const data = await papersWatchdog.run(job.id, () =>
+            cronjobPapers(job),
+          );
           return data;
         }
 
@@ -358,6 +380,10 @@ if (bullMqEnabled) {
 
 let started = false;
 
+export const isPapersWorkerHealthy = () =>
+  config.env !== "production" ||
+  (bullMqEnabled && started && papersWatchdog.isHealthy());
+
 export const startBullMq = async () => {
   if (started) {
     return;
@@ -388,5 +414,6 @@ export const startBullMq = async () => {
   await deviceUpdateScheduleQueue.waitUntilReady();
   await deviceUpdateScheduleWorker.waitUntilReady();
   await deviceUpdateScheduleQueueEvents.waitUntilReady();
+  if (config.env === "production") papersWatchdog.start();
   started = true;
 };

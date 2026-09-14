@@ -580,7 +580,7 @@ export default function imageEditorTools({
       );
       obj.setCoords(); // Update the coordinates
     });
-    store.form.setValue("meta.orientation", selectedRotation.name);
+    store.form.setValue("meta.orientation", selectedRotation.name, { shouldDirty: true });
   };
 
   // Snap rotation to increments and strong cardinal angles

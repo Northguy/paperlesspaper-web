@@ -1,3 +1,6 @@
+import { withDeadline, NETWORK_TIMEOUT_MS } from "../utils/withDeadline";
+import { addAbortSignal, type Readable } from "node:stream";
+import { normalizeTimestamp as getTimestamp } from "../utils/normalizeTimestamp";
 import httpStatus from "http-status";
 import Paper from "./papers.model";
 import {
@@ -571,7 +574,7 @@ const uploadSingleImageFromWebsite = async ({
       render: renderDiagnostics,
     });
 
-    if (!uploadSingleImageResult) {
+    if (!uploadSingleImageResult || uploadSingleImageResult.uploadFailed) {
       throw new ApiError(
         httpStatus.BAD_GATEWAY,
         "Could not upload plugin paper image.",
@@ -713,7 +716,7 @@ const uploadSingleImageFromWebsite = async ({
     render: renderDiagnostics,
   });
 
-  if (!uploadSingleImageResult) {
+  if (!uploadSingleImageResult || uploadSingleImageResult.uploadFailed) {
     throw new ApiError(httpStatus.BAD_GATEWAY, "Could not upload paper image.");
   }
   if (!uploadSingleImageResult.skippedUpload) {
@@ -737,6 +740,8 @@ const uploadSingleImageFromWebsite = async ({
 };
 
 const s3 = new S3Client({
+  maxAttempts: 2,
+  requestHandler: { connectionTimeout: 10_000, socketTimeout: NETWORK_TIMEOUT_MS, requestTimeout: NETWORK_TIMEOUT_MS, throwOnRequestTimeout: true },
   region: "eu-central-1",
   credentials: {
     accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
@@ -760,7 +765,7 @@ const objectExists = async (key: string): Promise<boolean> => {
   });
 
   try {
-    await s3.send(headCommand);
+    await withDeadline((abortSignal) => s3.send(headCommand, { abortSignal }), "S3 image existence check");
     return true;
   } catch (error) {
     if (isMissingS3ObjectError(error)) {
@@ -828,7 +833,7 @@ const copyObject = async (
   });
 
   try {
-    await s3.send(copyCommand);
+    await withDeadline((abortSignal) => s3.send(copyCommand, { abortSignal }), "S3 image snapshot copy");
     // console.log(`File copied from ${sourceKey} to ${destinationKey}`);
   } catch (error) {
     if (!isMissingS3ObjectError(error)) {
@@ -860,16 +865,7 @@ const copyObjectIfExists = async (
   }
 };
 
-const getTimestamp = (value: unknown): number | null => {
-  if (value === null || value === undefined) return null;
 
-  const timestamp =
-    typeof value === "number" ? value : new Date(value as string).getTime();
-
-  if (!Number.isFinite(timestamp)) return null;
-
-  return timestamp < 1_000_000_000_000 ? timestamp * 1000 : timestamp;
-};
 
 const getNextDeviceSyncTimestamp = (deviceStatus?: any): number | null => {
   return getTimestamp(deviceStatus?.nextDeviceSync);
@@ -991,21 +987,6 @@ const streamToBuffer = async (
   return Buffer.concat(chunks);
 };
 
-const getObjectBuffer = async (key: string): Promise<Buffer> => {
-  const getCommand = new GetObjectCommand({
-    Bucket: process.env.AWS_S3_BUCKET_NAME!,
-    Key: key,
-  });
-
-  try {
-    const response = await s3.send(getCommand);
-    return await streamToBuffer(response.Body as NodeJS.ReadableStream);
-  } catch (error) {
-    console.error("Error getting object from S3:", error);
-    throw error;
-  }
-};
-
 const getObjectBufferIfExists = async (key: string): Promise<Buffer | null> => {
   const getCommand = new GetObjectCommand({
     Bucket: process.env.AWS_S3_BUCKET_NAME!,
@@ -1013,8 +994,11 @@ const getObjectBufferIfExists = async (key: string): Promise<Buffer | null> => {
   });
 
   try {
-    const response = await s3.send(getCommand);
-    return await streamToBuffer(response.Body as NodeJS.ReadableStream);
+    return await withDeadline(async (abortSignal) => {
+      const response = await s3.send(getCommand, { abortSignal });
+      const body = addAbortSignal(abortSignal, response.Body as Readable);
+      return streamToBuffer(body);
+    }, "S3 slide image download");
   } catch (error) {
     if (isMissingS3ObjectError(error)) {
       return null;
@@ -1101,11 +1085,17 @@ const uploadSingleImageFromAny = async (
     const sourceBaseKey = "ePaperImages/" + paper._id;
     const sourceKey = `${sourceBaseKey}.png`;
 
-    const bufferOriginal = await getObjectBufferWithFallback([
+    const storedOriginal = await getObjectBufferWithFallback([
       `${sourceBaseKey}${ORIGINAL_IMAGE_JPEG_KIND}`,
       `${sourceBaseKey}${ORIGINAL_IMAGE_PNG_KIND}`,
     ]);
-    const buffer = await getObjectBuffer(sourceKey);
+    const storedBuffer = await getObjectBufferIfExists(sourceKey);
+    const { buffer, bufferOriginal } = await renderService.prepareStoredImageForDevice({
+      buffer: storedBuffer,
+      bufferOriginal: storedOriginal,
+      kind: device.kind,
+      orientation: paper.meta?.orientation || device.meta?.orientation || "portrait",
+    });
 
     // console.log('Uploading image from paper', paper._id, 'to parent paper', parentPaper._id);
 
@@ -1128,6 +1118,9 @@ const uploadSingleImageFromAny = async (
       },
     });
 
+    if (!uploadSingleImageResult || uploadSingleImageResult.uploadFailed) {
+      throw new ApiError(httpStatus.BAD_GATEWAY, "Could not upload slide image.");
+    }
     if (uploadSingleImageResult?.skippedUpload !== true) {
       await markCurrentFrameImageSyncPending({
         device,
@@ -1150,6 +1143,7 @@ const updatePlaylist = async (
   paper: any,
   device: any,
   trigger = "playlist",
+  displayAt = new Date(),
 ): Promise<any> => {
   const organizationId =
     paper?.organization?.toString?.() || paper?.organization;
@@ -1165,7 +1159,7 @@ const updatePlaylist = async (
     return { message: "Playlist has no entries" };
   }
 
-  const activeEntries = getActivePlaylistEntries(entries);
+  const activeEntries = getActivePlaylistEntries(entries, displayAt);
   if (!activeEntries.length) {
     return { message: "Playlist has no active entry" };
   }
@@ -1244,48 +1238,53 @@ const updateNextSlide = async (
   }
 
   let selectedSlide;
+  let nextSlideIndex: number;
   if (paper.meta.order === "random") {
     const selectedSlidesCount = selectedPapersArrayOnlyExisting.length;
-    const lastSelectedSlide =
+    const legacyLastSelectedSlide =
       Number.isInteger(paper.meta.currentSlide) &&
       paper.meta.currentSlide >= 0 &&
       paper.meta.currentSlide < selectedSlidesCount
         ? paper.meta.currentSlide
         : null;
+    const lastSelectedPaperId =
+      paper.meta.lastSelectedPaperId ||
+      (legacyLastSelectedSlide !== null
+        ? selectedPapersArrayOnlyExisting[legacyLastSelectedSlide].key
+        : null);
     const randomCandidates =
-      selectedSlidesCount > 1 && lastSelectedSlide !== null
+      selectedSlidesCount > 1 && lastSelectedPaperId !== null
         ? selectedPapersArrayOnlyExisting.filter(
-            (_slide, index) => index !== lastSelectedSlide,
+            (slide) => slide.key !== lastSelectedPaperId,
           )
         : selectedPapersArrayOnlyExisting;
 
     selectedSlide =
       randomCandidates[Math.floor(Math.random() * randomCandidates.length)];
-    paper.meta.currentSlide = selectedPapersArrayOnlyExisting.findIndex(
+    nextSlideIndex = selectedPapersArrayOnlyExisting.findIndex(
       (slide) => slide.key === selectedSlide?.key,
     );
     result.selectedRandom = selectedSlide;
-    result.updateById = await updateById(paper._id, {
-      meta: { ...paper.meta },
-    });
   } else {
     const selectedSlidesCount = selectedPapersArrayOnlyExisting.length;
     const rawCurrentSlide = paper.meta.currentSlide;
+    const lastSelectedIndex = selectedPapersArrayOnlyExisting.findIndex(
+      (slide) => slide.key === paper.meta.lastSelectedPaperId,
+    );
     const currentSlide =
-      Number.isInteger(rawCurrentSlide) &&
-      rawCurrentSlide >= 0 &&
-      rawCurrentSlide < selectedSlidesCount
-        ? rawCurrentSlide
-        : 0;
+      lastSelectedIndex >= 0
+        ? (lastSelectedIndex + 1) % selectedSlidesCount
+        : Number.isInteger(rawCurrentSlide) &&
+            rawCurrentSlide >= 0 &&
+            rawCurrentSlide < selectedSlidesCount
+          ? rawCurrentSlide
+          : 0;
 
     selectedSlide = selectedPapersArrayOnlyExisting[currentSlide];
 
-    paper.meta.currentSlide = (currentSlide + 1) % selectedSlidesCount;
+    nextSlideIndex = (currentSlide + 1) % selectedSlidesCount;
 
-    result.selectedSequential = paper.meta.currentSlide;
-    result.updateById = await updateById(paper._id, {
-      meta: { ...paper.meta },
-    });
+    result.selectedSequential = nextSlideIndex;
   }
 
   if (selectedSlide?.key) {
@@ -1298,6 +1297,15 @@ const updateNextSlide = async (
       device,
       trigger,
     );
+    // Keep the current position if rendering or uploading fails, so retries
+    // prepare the same sequential slide instead of silently skipping it.
+    result.updateById = await updateById(paper._id, {
+      meta: {
+        ...paper.meta,
+        currentSlide: nextSlideIndex,
+        lastSelectedPaperId: selectedSlide.key,
+      },
+    });
   }
   return result;
 };

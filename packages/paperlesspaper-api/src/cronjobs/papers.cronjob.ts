@@ -1,3 +1,4 @@
+import { normalizeTimestamp as getTimestamp } from "../utils/normalizeTimestamp";
 import { setTimeout as delay } from "node:timers/promises";
 import { Device as DeviceModel, devicesService } from "@internetderdinge/api";
 import papersService from "../papers/papers.service.ts";
@@ -29,15 +30,7 @@ type SyncClaimState = {
   completedAt?: Date;
 };
 
-const getTimestamp = (value: unknown): number | null => {
-  if (value === null || value === undefined) return null;
 
-  const timestamp =
-    typeof value === "number" ? value : new Date(value as string).getTime();
-  if (!Number.isFinite(timestamp)) return null;
-
-  return timestamp < 1_000_000_000_000 ? timestamp * 1000 : timestamp;
-};
 
 const withTimeout = <T>(
   promise: Promise<T>,
@@ -136,8 +129,13 @@ const claimDeviceSync = async ({
   const claimedDevice = await DeviceModel.findOneAndUpdate(
     {
       _id: deviceId,
+      paper: paperId,
       $or: [
         { [`${metaPath}.nextDeviceSync`]: { $ne: nextDeviceSync } },
+        {
+          [`${metaPath}.paperId`]: { $ne: paperId },
+          [`${metaPath}.status`]: "completed",
+        },
         {
           [`${metaPath}.nextDeviceSync`]: nextDeviceSync,
           [`${metaPath}.status`]: "processing",
@@ -426,6 +424,7 @@ export const cronjobPapers = async (
                 resultPaper,
                 device,
                 "cronjob-playlist",
+                new Date(Math.max(nextDeviceSyncTimestamp, now.getTime())),
               );
               updatedEntries.push({
                 deviceId: device.id,
@@ -434,6 +433,10 @@ export const cronjobPapers = async (
                 action: "playlist",
                 updateResult: updatePlaylistResult,
               });
+              if (!updatePlaylistResult?.selectedPaperId) {
+                await releaseDeviceSyncClaim({ device, nextDeviceSync });
+                return;
+              }
             } else {
               metrics.uploadsTriggered += 1;
               metrics.singleImageUploads += 1;

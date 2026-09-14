@@ -1,3 +1,4 @@
+import { withDeadline, NETWORK_TIMEOUT_MS } from "../utils/withDeadline";
 import axios from "axios";
 import { AuthenticationClient } from "auth0";
 import { S3Client } from "@aws-sdk/client-s3";
@@ -37,6 +38,7 @@ type UploadSingleImageParams = {
 };
 
 const auth0AuthClient = new AuthenticationClient({
+  timeoutDuration: NETWORK_TIMEOUT_MS,
   domain: process.env.AUTH0_MANAGEMENT_DOMAIN!,
   clientId: process.env.AUTH0_MANAGEMENT_CLIENT_ID!,
   clientSecret: process.env.AUTH0_MANAGEMENT_CLIENT_SECRET!,
@@ -44,6 +46,13 @@ const auth0AuthClient = new AuthenticationClient({
 
 const s3 = new S3Client({
   region: "eu-central-1",
+  maxAttempts: 2,
+  requestHandler: {
+    connectionTimeout: 10_000,
+    socketTimeout: NETWORK_TIMEOUT_MS,
+    requestTimeout: NETWORK_TIMEOUT_MS,
+    throwOnRequestTimeout: true,
+  },
   credentials: {
     accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
@@ -102,7 +111,17 @@ const uploadImage = async ({
     },
   });
 
-  await parallelUploads3.done();
+  await withDeadline(async (signal) => {
+    const abort = () => {
+      void parallelUploads3.abort().catch(() => undefined);
+    };
+    signal.addEventListener("abort", abort, { once: true });
+    try {
+      await parallelUploads3.done();
+    } finally {
+      signal.removeEventListener("abort", abort);
+    }
+  }, "S3 image upload");
 };
 
 const toJpegBuffer = async (
@@ -213,9 +232,15 @@ export const downloadPreviousOriginalImageVariant = async (
   for (const key of getOriginalImageKeys(id)) {
     try {
       const signedUrl = await getSignedFileUrl({ fileName: key });
-      const response = await axios.get<ArrayBuffer>(signedUrl, {
-        responseType: "arraybuffer",
-      });
+      const response = await withDeadline(
+        (signal) =>
+          axios.get<ArrayBuffer>(signedUrl, {
+            responseType: "arraybuffer",
+            timeout: NETWORK_TIMEOUT_MS,
+            signal,
+          }),
+        "Previous original image download",
+      );
       return { buffer: Buffer.from(response.data), key };
     } catch (error: any) {
       lastError = error;
@@ -307,9 +332,15 @@ const lookupPreviousDeviceImage = async (
 
   try {
     const signedUrl = await getSignedFileUrl({ fileName: key });
-    const response = await axios.get<ArrayBuffer>(signedUrl, {
-      responseType: "arraybuffer",
-    });
+    const response = await withDeadline(
+      (signal) =>
+        axios.get<ArrayBuffer>(signedUrl, {
+          responseType: "arraybuffer",
+          timeout: NETWORK_TIMEOUT_MS,
+          signal,
+        }),
+      "Previous device image download",
+    );
     return {
       buffer: Buffer.from(response.data),
       key,
@@ -458,12 +489,19 @@ export const uploadSingleImage = async ({
 
   const persistUploadLog = async (): Promise<void> => {
     try {
-      await saveDeviceUploadLog({
-        ...uploadLog,
-        decision: uploadLog.decision ? { ...uploadLog.decision } : undefined,
-        stages: { ...uploadLog.stages },
-        failures: uploadLog.failures?.map((entry) => ({ ...entry })),
-      });
+      await withDeadline(
+        () =>
+          saveDeviceUploadLog({
+            ...uploadLog,
+            decision: uploadLog.decision
+              ? { ...uploadLog.decision }
+              : undefined,
+            stages: { ...uploadLog.stages },
+            failures: uploadLog.failures?.map((entry) => ({ ...entry })),
+          }),
+        "Device upload log persistence",
+        5_000,
+      );
     } catch (error) {
       // Logging must never block a physical frame update.
       console.error("Unexpected device upload logging failure", {
@@ -528,6 +566,8 @@ export const uploadSingleImage = async ({
     //   storedOriginalBuffer,
     // );
     const similarityStartedAt = Date.now();
+    stages.similarity = { status: "started" };
+    await persistUploadLog();
     const similarityResult = forceUpload
       ? {
           skipUpload: false,
@@ -550,8 +590,8 @@ export const uploadSingleImage = async ({
       status: forceUpload
         ? "bypassed"
         : similarityResult.reason === "similarity-comparison-failed"
-          ? "failed"
-          : "completed",
+        ? "failed"
+        : "completed",
       similarityPercentage,
       threshold: SIMILARITY_THRESHOLD,
       reason: similarityResult.reason,
@@ -608,6 +648,7 @@ export const uploadSingleImage = async ({
 
     const paperImagesStartedAt = Date.now();
     stages.paperImages = { status: "started" };
+    await persistUploadLog();
     const [storedOriginalBuffer, temporaryOriginalPng, thumbnailBuffer] =
       await Promise.all([
         createStoredOriginalImageBuffer(originalBuffer),
@@ -666,14 +707,21 @@ export const uploadSingleImage = async ({
     try {
       const iotUploadRequestStartedAt = Date.now();
       stages.iotUploadRequest = { status: "started" };
+      await persistUploadLog();
       const accessToken = await getAuth0Token();
 
-      response = await axios.post(
-        `${process.env.IOT_API_URL_EPAPER}uploads`,
-        { deviceName },
-        {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        },
+      response = await withDeadline(
+        (signal) =>
+          axios.post(
+            `${process.env.IOT_API_URL_EPAPER}uploads`,
+            { deviceName },
+            {
+              timeout: NETWORK_TIMEOUT_MS,
+              signal,
+              headers: { Authorization: `Bearer ${accessToken}` },
+            },
+          ),
+        "IoT upload URL request",
       );
       const uploadURL = response?.data?.uploadURL;
       let uploadHost: string | undefined;
@@ -696,9 +744,16 @@ export const uploadSingleImage = async ({
       if (uploadURL) {
         const iotPutStartedAt = Date.now();
         stages.iotPut = { status: "started" };
-        const putResponse = await axios.put(uploadURL, buffer, {
-          headers: { "Content-Type": "text/octet-stream" },
-        });
+        await persistUploadLog();
+        const putResponse = await withDeadline(
+          (signal) =>
+            axios.put(uploadURL, buffer, {
+              timeout: NETWORK_TIMEOUT_MS,
+              signal,
+              headers: { "Content-Type": "text/octet-stream" },
+            }),
+          "IoT image upload",
+        );
         stages.iotPut = {
           status: "completed",
           httpStatus: putResponse?.status,
@@ -713,6 +768,7 @@ export const uploadSingleImage = async ({
           status: "started",
           key: getDeviceImageKey(deviceName),
         };
+        await persistUploadLog();
         try {
           await uploadImage({
             blob: buffer,
@@ -793,13 +849,16 @@ export const uploadSingleImage = async ({
     }
 
     await finalizeUploadLog(finalStatus, finalReason);
-    return buildUploadResponse(
-      response?.data || {},
-      similarityPercentage,
-      false,
-      attemptId,
-      finalReason,
-    );
+    return {
+      ...buildUploadResponse(
+        response?.data || {},
+        similarityPercentage,
+        false,
+        attemptId,
+        finalReason,
+      ),
+      uploadFailed: finalStatus === "failed",
+    };
   } catch (error) {
     if (!stages.validation || stages.validation.status === "pending") {
       stages.validation = {
@@ -807,7 +866,12 @@ export const uploadSingleImage = async ({
         error: serializeDeviceLogError(error),
       };
     }
-    if (stages.similarity?.status === "pending") {
+    if (stages.similarity?.status === "started") {
+      stages.similarity = {
+        status: "failed",
+        error: serializeDeviceLogError(error),
+      };
+    } else if (stages.similarity?.status === "pending") {
       stages.similarity = {
         status: "not-run",
         reason: "upload-processing-failed",

@@ -120,6 +120,32 @@ describe("papers cronjob", () => {
     });
   });
 
+  it.each(["1786097100", "1786097100000"])("prepares a refresh when the device returns Unix time as %s", async (nextDeviceSync) => {
+    populateDeviceStatusMock.mockResolvedValue({ nextDeviceSync });
+    const pending = cronjobPapers({ id: "string-timestamp" });
+    await vi.runAllTimersAsync();
+    const result = await pending;
+    expect(result.meta.errors).toEqual([]);
+    expect(updateNextSlideMock).toHaveBeenCalledOnce();
+  });
+
+  it("uses the upcoming wakeup time for playlists", async () => {
+    getByIdsMock.mockResolvedValue([{ ...buildPaper(), kind: "playlist" }]);
+    updatePlaylistMock.mockResolvedValue({ selectedPaperId: "scheduled-paper" });
+    await cronjobPapers({ id: "playlist-wakeup" });
+    expect(updatePlaylistMock).toHaveBeenCalledWith(
+      expect.any(Object), expect.any(Object), "cronjob-playlist", new Date("2026-08-07T10:05:00.000Z"),
+    );
+  });
+
+  it("releases the refresh lock when a playlist has no active entry", async () => {
+    getByIdsMock.mockResolvedValue([{ ...buildPaper(), kind: "playlist" }]);
+    updatePlaylistMock.mockResolvedValue({ message: "Playlist has no active entry" });
+    await cronjobPapers({ id: "empty-playlist" });
+    expect(updateOneMock).toHaveBeenCalledOnce();
+    expect(updateOneMock).toHaveBeenCalledWith(expect.any(Object), { $unset: { "meta.paperCronjobSync": "" } });
+  });
+
   it("does not prepare content outside the five-minute window", async () => {
     populateDeviceStatusMock.mockResolvedValue({
       nextDeviceSync: "2026-08-07T10:05:00.001Z",
@@ -176,6 +202,30 @@ describe("papers cronjob", () => {
       dueForSync: 0,
       alreadyPrepared: 1,
     });
+  });
+
+  it("allows newly selected content after another paper was prepared for this sync", async () => {
+    // Emulate the database predicate against a completed claim for the old paper.
+    const oldClaim = {
+      nextDeviceSync: "2026-08-07T10:05:00.000Z",
+      paperId: "previous-paper",
+      status: "completed",
+    };
+    findOneAndUpdateMock.mockImplementation(async (filter) => {
+      const eligible = filter.$or.some((branch: Record<string, any>) =>
+        Object.entries(branch).every(([path, condition]) => {
+          const actual = oldClaim[path.split(".").pop() as keyof typeof oldClaim];
+          return condition && typeof condition === "object" && "$ne" in condition
+            ? actual !== condition.$ne
+            : actual === condition;
+        }),
+      );
+      return eligible ? { _id: "device-db-id" } : null;
+    });
+    const result = await cronjobPapers({ id: "new-paper" });
+    expect(updateNextSlideMock).toHaveBeenCalledOnce();
+    expect(result.meta.devices.alreadyPrepared).toBe(0);
+    expect(findOneAndUpdateMock.mock.calls[0][0].paper).toBe("paper-id");
   });
 
   it("retries missing device status and reports it instead of silently skipping", async () => {

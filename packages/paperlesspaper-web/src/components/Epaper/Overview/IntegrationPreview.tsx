@@ -6,7 +6,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { Trans } from "react-i18next";
+import { Trans, useTranslation } from "react-i18next";
 import type { Rotation } from "../Integrations/ImageEditor/useRotationList";
 import styles from "./photoFrame.module.scss";
 import { isHttpUrl } from "./photoFrameModel";
@@ -36,6 +36,7 @@ export default function IntegrationPreview({
   size,
   url,
 }: IntegrationPreviewProps) {
+  const { t } = useTranslation();
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [iframeLoadingError, setIframeLoadingError] = useState(false);
   const validUrl = isHttpUrl(url);
@@ -106,7 +107,7 @@ export default function IntegrationPreview({
             setIframeLoadingError(false);
             postMessages();
           }}
-          title="E-paper integration preview"
+          title={t("E-paper integration preview")}
         />
         {shouldShowEmptyMessage && EmptyMessage && (
           <div className={styles.iframeOverlay}>
