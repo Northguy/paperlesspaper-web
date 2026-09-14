@@ -1,4 +1,6 @@
 import { withDeadline, NETWORK_TIMEOUT_MS } from "../utils/withDeadline";
+import { getDeviceImageKey } from "./deviceImageCache.js";
+export { DEVICE_IMAGE_PREFIX } from "./deviceImageCache.js";
 import axios from "axios";
 import { AuthenticationClient } from "auth0";
 import { S3Client } from "@aws-sdk/client-s3";
@@ -62,7 +64,6 @@ const s3 = new S3Client({
 export const ORIGINAL_IMAGE_JPEG_KIND = "original.jpg";
 export const ORIGINAL_IMAGE_PNG_KIND = "original.png";
 export const THUMBNAIL_IMAGE_JPEG_KIND = "thumbnail.jpg";
-export const DEVICE_IMAGE_PREFIX = "ePaperDeviceImages";
 
 const ORIGINAL_IMAGE_JPEG_QUALITY = 95;
 const THUMBNAIL_IMAGE_JPEG_QUALITY = 75;
@@ -298,9 +299,6 @@ export const evaluateSimilarityBeforeUpload = async (
     return { similarityPercentage: null, skipUpload: false };
   }
 };
-
-const getDeviceImageKey = (deviceName: string): string =>
-  `${DEVICE_IMAGE_PREFIX}/${encodeURIComponent(deviceName)}.png`;
 
 type PreviousDeviceImageLookup = {
   buffer: Buffer | null;

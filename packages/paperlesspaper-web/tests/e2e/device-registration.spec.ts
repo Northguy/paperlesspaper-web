@@ -84,6 +84,7 @@ test.describe("Device registration", () => {
         contentType: "application/json",
         body: JSON.stringify({
           activation_status: "success",
+          registrationCompleted: true,
           createdDevice: {
             id: "507f1f77bcf86cd799439011",
             deviceId: testDeviceId,
@@ -157,6 +158,7 @@ test.describe("Device registration", () => {
         contentType: "application/json",
         body: JSON.stringify({
           activation_status: "success",
+          registrationCompleted: true,
           createdDevice: {
             id: "507f1f77bcf86cd799439012",
             deviceId: onboardingDeviceId,
@@ -208,7 +210,7 @@ test.describe("Device registration", () => {
     });
   });
 
-  test("blocks an existing device before Wi-Fi provisioning", async ({
+  test("shows a registration preflight conflict before Wi-Fi provisioning", async ({
     page,
   }) => {
     createdOrganizationId = await createTemporaryOrganization(page);

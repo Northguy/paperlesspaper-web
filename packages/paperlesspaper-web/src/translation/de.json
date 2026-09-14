@@ -800,5 +800,8 @@
   "Yes": "Ja",
   "Settings saved. Your frame will receive the changes when it next wakes up. Press the button on the back to sync now.": "Einstellungen gespeichert. Dein Bilderrahmen übernimmt die Änderungen beim nächsten Aufwachen. Drücke die Taste auf der Rückseite, um jetzt zu synchronisieren.",
   "Light_font": "Leicht",
-  "PRINTER_API_KEY_STORED": "Kopiere und speichere diesen API-Schlüssel jetzt sicher. Aus Sicherheitsgründen ist es möglich, dass du ihn nicht erneut einsehen kannst. Du kannst Schlüssel in deinen <accountLink>Kontoeinstellungen</accountLink> verwalten."
+  "PRINTER_API_KEY_STORED": "Kopiere und speichere diesen API-Schlüssel jetzt sicher. Aus Sicherheitsgründen ist es möglich, dass du ihn nicht erneut einsehen kannst. Du kannst Schlüssel in deinen <accountLink>Kontoeinstellungen</accountLink> verwalten.",
+  "Press the button on the device once, or wait for the Wi-Fi setup to confirm activation.": "Drücke einmal die Taste am Gerät oder warte, bis die WLAN-Einrichtung die Aktivierung bestätigt.",
+  "Activation was not confirmed within five minutes. Please try again. An already active device remains with its previous organization.": "Die Aktivierung wurde nicht innerhalb von fünf Minuten bestätigt. Bitte versuche es erneut. Ein bereits aktiviertes Gerät bleibt seiner bisherigen Organisation zugeordnet.",
+  "Device ownership could not be confirmed": "Die Gerätezuordnung konnte nicht bestätigt werden"
 }

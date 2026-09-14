@@ -8,11 +8,22 @@ const axiosMock = vi.hoisted(() => ({
   put: vi.fn(),
 }));
 const compareImagesMock = vi.hoisted(() => vi.fn());
+const cacheDeleteMock = vi.hoisted(() => vi.fn());
+vi.mock("@aws-sdk/client-s3", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@aws-sdk/client-s3")>();
+  return {
+    ...actual,
+    S3Client: class {
+      send = cacheDeleteMock;
+      destroy() {}
+    },
+  };
+});
 const saveDeviceUploadLogMock = vi.hoisted(() => vi.fn(async () => true));
 const getSignedFileUrlMock = vi.hoisted(() =>
   vi.fn(async ({ fileName }: { fileName: string }) => {
     return `https://signed.invalid/${encodeURIComponent(fileName)}`;
-  }),
+  })
 );
 
 vi.mock("../../src/devicesLogs/devicesLogs.service.js", () => ({
@@ -64,8 +75,46 @@ vi.mock("@internetderdinge/api", () => ({
 }));
 
 describe("iotdevice.service", () => {
+  it("uploads the first frame for a new ownership assignment even if the previous owner's cached frame matches", async () => {
+    const frame = await sharp({
+      create: { width: 8, height: 8, channels: 3, background: "white" },
+    })
+      .png()
+      .toBuffer();
+    axiosMock.get.mockResolvedValue({ data: frame });
+    compareImagesMock.mockResolvedValue(100);
+    const service = await import("../../src/iotdevice/iotdevice.service");
+    const { resetDeviceImageCache } = await import(
+      "../../src/iotdevice/deviceImageCache"
+    );
+    cacheDeleteMock.mockImplementationOnce(async (command) => {
+      expect(command.input).toEqual({
+        Bucket: "bucket",
+        Key: "ePaperDeviceImages/epd7-transferred.png",
+      });
+      axiosMock.get.mockRejectedValue(
+        Object.assign(new Error("No previous device image"), {
+          response: { status: 404 },
+        })
+      );
+    });
+    await resetDeviceImageCache("epd7-transferred");
+    expect(cacheDeleteMock).toHaveBeenCalledOnce();
+    // IoT clears its epdPicture on takeover. Registration also clears the
+    // serial-keyed comparison image before this first upload.
+    const result = await service.uploadSingleImage({
+      deviceName: "epd7-transferred",
+      deviceId: "new-owner-device-id",
+      id: "new-owner-paper-id",
+      buffer: frame,
+      bufferOriginal: frame,
+    });
+    expect(result.skippedUpload).toBe(false);
+    expect(axiosMock.put).toHaveBeenCalledOnce();
+  });
   beforeEach(() => {
     vi.clearAllMocks();
+    cacheDeleteMock.mockReset().mockResolvedValue({});
     uploadParams.length = 0;
     saveDeviceUploadLogMock.mockResolvedValue(true);
 
@@ -80,7 +129,7 @@ describe("iotdevice.service", () => {
     axiosMock.get.mockRejectedValue(
       Object.assign(new Error("No previous device image"), {
         response: { status: 404 },
-      }),
+      })
     );
     axiosMock.post.mockResolvedValue({
       data: { uploadURL: "https://upload.invalid/device-image" },
@@ -123,7 +172,7 @@ describe("iotdevice.service", () => {
         stages: expect.objectContaining({
           iotUploadRequest: { status: "started" },
         }),
-      }),
+      })
     );
     await vi.advanceTimersByTimeAsync(60_000);
     const result = await upload;
@@ -131,7 +180,7 @@ describe("iotdevice.service", () => {
     expect(result.uploadFailed).toBe(true);
     expect(axiosMock.put).not.toHaveBeenCalled();
     expect(saveDeviceUploadLogMock).toHaveBeenLastCalledWith(
-      expect.objectContaining({ status: "failed" }),
+      expect.objectContaining({ status: "failed" })
     );
     vi.useRealTimers();
     await service.uploadSingleImage({
@@ -207,7 +256,7 @@ describe("iotdevice.service", () => {
     });
 
     const uploadedByKey = new Map(
-      uploadParams.map((params) => [params.Key, params]),
+      uploadParams.map((params) => [params.Key, params])
     );
 
     expect(uploadedByKey.has("ePaperImages/paper-1.png")).toBe(true);
@@ -217,36 +266,36 @@ describe("iotdevice.service", () => {
     expect(uploadedByKey.has("ePaperDeviceImages/device-1.png")).toBe(true);
 
     expect(
-      uploadedByKey.get("ePaperImages/paper-1original.jpg")?.ContentType,
+      uploadedByKey.get("ePaperImages/paper-1original.jpg")?.ContentType
     ).toBe("image/jpeg");
     expect(
-      uploadedByKey.get("ePaperImages/paper-1original.png")?.ContentType,
+      uploadedByKey.get("ePaperImages/paper-1original.png")?.ContentType
     ).toBe("image/png");
     expect(
-      uploadedByKey.get("ePaperImages/paper-1thumbnail.jpg")?.ContentType,
+      uploadedByKey.get("ePaperImages/paper-1thumbnail.jpg")?.ContentType
     ).toBe("image/jpeg");
 
     const originalMetadata = await sharp(
-      uploadedByKey.get("ePaperImages/paper-1original.jpg")?.Body,
+      uploadedByKey.get("ePaperImages/paper-1original.jpg")?.Body
     ).metadata();
     expect(originalMetadata.format).toBe("jpeg");
     expect(originalMetadata.width).toBe(800);
     expect(originalMetadata.height).toBe(600);
 
     const temporaryOriginalPng = uploadedByKey.get(
-      "ePaperImages/paper-1original.png",
+      "ePaperImages/paper-1original.png"
     )?.Body;
     const temporaryOriginalMetadata = await sharp(
-      temporaryOriginalPng,
+      temporaryOriginalPng
     ).metadata();
     expect(temporaryOriginalMetadata.format).toBe("png");
     expect(Buffer.from(temporaryOriginalPng).equals(originalBuffer)).toBe(true);
 
     const thumbnailMetadata = await sharp(
-      uploadedByKey.get("ePaperImages/paper-1thumbnail.jpg")?.Body,
+      uploadedByKey.get("ePaperImages/paper-1thumbnail.jpg")?.Body
     ).metadata();
     expect(Math.min(thumbnailMetadata.width!, thumbnailMetadata.height!)).toBe(
-      500,
+      500
     );
 
     expect(axiosMock.put).toHaveBeenCalledWith(
@@ -254,7 +303,7 @@ describe("iotdevice.service", () => {
       deviceBuffer,
       expect.objectContaining({
         headers: { "Content-Type": "text/octet-stream" },
-      }),
+      })
     );
     expect(saveDeviceUploadLogMock).toHaveBeenLastCalledWith(
       expect.objectContaining({
@@ -310,7 +359,7 @@ describe("iotdevice.service", () => {
             durationMs: expect.any(Number),
           }),
         }),
-      }),
+      })
     );
   });
 
@@ -344,7 +393,7 @@ describe("iotdevice.service", () => {
       expect.objectContaining({
         skippedUpload: false,
         similarityPercentage: null,
-      }),
+      })
     );
     expect(compareImagesMock).not.toHaveBeenCalled();
     expect(axiosMock.put).toHaveBeenCalledWith(
@@ -352,7 +401,7 @@ describe("iotdevice.service", () => {
       deviceBuffer,
       expect.objectContaining({
         headers: { "Content-Type": "text/octet-stream" },
-      }),
+      })
     );
   });
 
@@ -377,13 +426,13 @@ describe("iotdevice.service", () => {
     });
     expect(compareImagesMock).toHaveBeenCalledWith(
       previousDeviceBuffer,
-      deviceBuffer,
+      deviceBuffer
     );
     expect(result).toEqual(
       expect.objectContaining({
         skippedUpload: true,
         similarityPercentage: 100,
-      }),
+      })
     );
     expect(axiosMock.post).not.toHaveBeenCalled();
     expect(axiosMock.put).not.toHaveBeenCalled();
@@ -400,7 +449,7 @@ describe("iotdevice.service", () => {
           paperImages: expect.objectContaining({ status: "not-run" }),
           iotPut: expect.objectContaining({ status: "not-run" }),
         }),
-      }),
+      })
     );
   });
 
@@ -431,8 +480,8 @@ describe("iotdevice.service", () => {
 
     expect(
       uploadParams.some(
-        (params) => params.Key === "ePaperDeviceImages/device-1.png",
-      ),
+        (params) => params.Key === "ePaperDeviceImages/device-1.png"
+      )
     ).toBe(false);
     expect(saveDeviceUploadLogMock).toHaveBeenLastCalledWith(
       expect.objectContaining({
@@ -445,7 +494,7 @@ describe("iotdevice.service", () => {
             message: "IoT PUT failed",
           }),
         ]),
-      }),
+      })
     );
   });
 
@@ -480,7 +529,7 @@ describe("iotdevice.service", () => {
       expect.objectContaining({
         skippedUpload: false,
         reason: "iot-upload-url-missing",
-      }),
+      })
     );
     expect(axiosMock.put).not.toHaveBeenCalled();
     expect(saveDeviceUploadLogMock).toHaveBeenLastCalledWith(
@@ -495,7 +544,7 @@ describe("iotdevice.service", () => {
           }),
           iotPut: expect.objectContaining({ status: "not-run" }),
         }),
-      }),
+      })
     );
   });
 
@@ -527,7 +576,7 @@ describe("iotdevice.service", () => {
       expect.objectContaining({
         skippedUpload: false,
         reason: "device-frame-uploaded",
-      }),
+      })
     );
     expect(axiosMock.put).toHaveBeenCalledOnce();
   });

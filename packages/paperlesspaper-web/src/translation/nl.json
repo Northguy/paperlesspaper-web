@@ -674,5 +674,8 @@
   "Settings saved. Your frame will receive the changes when it next wakes up. Press the button on the back to sync now.": "Instellingen opgeslagen. Je fotolijst ontvangt de wijzigingen zodra deze weer ontwaakt. Druk op de knop aan de achterkant om nu te synchroniseren.",
   "Light_font": "Licht",
   "If do a refresh and clean before load picture (default:true)": "Het scherm vernieuwen en wissen voordat de afbeelding wordt geladen (standaard: true)",
-  "PRINTER_API_KEY_STORED": "Kopieer en bewaar deze API-sleutel nu veilig. Om veiligheidsredenen is het mogelijk dat je deze niet opnieuw kunt bekijken. Je kunt sleutels beheren in je <accountLink>accountinstellingen</accountLink>."
+  "PRINTER_API_KEY_STORED": "Kopieer en bewaar deze API-sleutel nu veilig. Om veiligheidsredenen is het mogelijk dat je deze niet opnieuw kunt bekijken. Je kunt sleutels beheren in je <accountLink>accountinstellingen</accountLink>.",
+  "Press the button on the device once, or wait for the Wi-Fi setup to confirm activation.": "Druk eenmaal op de knop van het apparaat of wacht tot de wifi-installatie de activering bevestigt.",
+  "Activation was not confirmed within five minutes. Please try again. An already active device remains with its previous organization.": "De activering is niet binnen vijf minuten bevestigd. Probeer het opnieuw. Een reeds geactiveerd apparaat blijft gekoppeld aan de vorige organisatie.",
+  "Device ownership could not be confirmed": "Het eigendom van het apparaat kon niet worden bevestigd"
 }

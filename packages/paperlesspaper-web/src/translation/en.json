@@ -595,5 +595,8 @@
   "{{count}} selected": "{{count}} selected",
   "Add {{count}} selected pictures to a slideshow.": "Add {{count}} selected pictures to a slideshow.",
   "If do a refresh and clean before load picture (default:true)": "Refresh and clear the screen before loading the picture (default: true)",
-  "PRINTER_API_KEY_STORED": "Copy and store this API key securely now. For security reasons, you may not be able to view it again. You can manage keys in your <accountLink>account settings</accountLink>."
+  "PRINTER_API_KEY_STORED": "Copy and store this API key securely now. For security reasons, you may not be able to view it again. You can manage keys in your <accountLink>account settings</accountLink>.",
+  "Press the button on the device once, or wait for the Wi-Fi setup to confirm activation.": "Press the button on the device once, or wait for the Wi-Fi setup to confirm activation.",
+  "Activation was not confirmed within five minutes. Please try again. An already active device remains with its previous organization.": "Activation was not confirmed within five minutes. Please try again. An already active device remains with its previous organization.",
+  "Device ownership could not be confirmed": "Device ownership could not be confirmed"
 }

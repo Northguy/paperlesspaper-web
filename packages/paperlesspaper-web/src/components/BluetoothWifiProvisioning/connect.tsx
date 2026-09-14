@@ -21,9 +21,11 @@ const normalizeDeviceName = (name?: string | null) =>
 export const useBluetoothWifiProvisioning = ({
   continueProcess,
   deviceId,
+  beforeWriteCredentials,
 }: {
   continueProcess: any;
   deviceId: string;
+  beforeWriteCredentials?: () => Promise<boolean>;
 }) => {
   const e2eMockWifiProvisioning =
     import.meta.env.DEV &&
@@ -51,6 +53,8 @@ export const useBluetoothWifiProvisioning = ({
   const scanRejectRef = useRef<((error: Error) => void) | null>(null);
   const runIdRef = useRef(0);
   const cancelledRef = useRef(false);
+  const writingRef = useRef(false);
+  const [isWriting, setIsWriting] = useState(false);
 
   const clearScanTimeout = useCallback(() => {
     if (scanTimeoutRef.current) {
@@ -385,12 +389,19 @@ export const useBluetoothWifiProvisioning = ({
   };
 
   const writeWifiCredentials = async ({ ssid, password }) => {
-    if (e2eMockWifiProvisioning) {
-      continueProcess();
-      return;
-    }
-
+    if (writingRef.current) return;
+    writingRef.current = true;
+    setIsWriting(true);
+    const writeRun = runIdRef.current;
     try {
+      // Registration must be pending before firmware sends its BLE proof.
+      // Ordinary Wi-Fi changes omit this callback and never start a claim/reset.
+      if (beforeWriteCredentials && !(await beforeWriteCredentials())) return;
+      if (writeRun !== runIdRef.current) return;
+      if (e2eMockWifiProvisioning) {
+        continueProcess();
+        return;
+      }
       const currentDevice = device || deviceRef.current;
 
       if (!currentDevice?.deviceId) {
@@ -404,16 +415,22 @@ export const useBluetoothWifiProvisioning = ({
         textToDataView(ssid)
       );
 
+      if (writeRun !== runIdRef.current) return;
+
       await BleClient.write(
         currentDevice.deviceId,
         WIFI_PROVISIONING_SERVICE,
         CONNECT_PASSWORD_CHARACTERISTIC,
         textToDataView(password)
       );
+      if (writeRun !== runIdRef.current) return;
       //setConnectionState("wifi-written");
+      const cleanupRun = runIdRef.current + 1;
       await cleanupBluetooth();
+      if (cleanupRun !== runIdRef.current) return;
       continueProcess();
     } catch (error) {
+      if (writeRun !== runIdRef.current) return;
       console.log("error wifi-written", error);
       setConnectionError({
         error,
@@ -422,6 +439,9 @@ export const useBluetoothWifiProvisioning = ({
         position: "wifi-written",
       });
       setConnectionState("ble-error");
+    } finally {
+      writingRef.current = false;
+      setIsWriting(false);
     }
   };
 
@@ -451,6 +471,7 @@ export const useBluetoothWifiProvisioning = ({
     wifiNetworks,
     readWifiNetworks,
     writeWifiCredentials,
+    isWriting,
     cleanupBluetooth,
     debugInfo: {
       requestedDeviceId: deviceId,
