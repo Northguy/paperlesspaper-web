@@ -19,15 +19,20 @@ handlers. No change or publication of `@internetderdinge/api` is required.
 - `registrationCompleted: true` and `createdDevice` are returned only after IoT
   confirms the target organization with a key and the local assignment is saved.
   The key stays on the server and is not persisted or included in responses.
-- Ownership transfer and paper detachment use one MongoDB transaction. The
-  old device document is deleted and a fresh assignment is inserted with a new
+- Ownership transfer uses sequential writes and works with standalone MongoDB.
+  The old device document is deleted and a fresh assignment is inserted with a new
   `_id`. Old settings, patient, paper and billing fields are not transferred.
-  Old image paths, logs and pending deactivation receipts remain attached to the
-  old database id. Papers remain with their original owner.
-  This requires a MongoDB replica set/transaction support; no non-atomic fallback
-  is used. Repeated completion for the same owner preserves their current data.
+  Papers remain with their original owner. Before inserting a new assignment,
+  the serial-keyed `ePaperDeviceImages/<serial>.png` comparison image is deleted
+  from S3, allowing the next image to upload even if it matches the old owner's
+  image. Paper originals and previews are preserved. A failed cache deletion
+  stops completion and is retried on the next poll. Repeated completion for the
+  same owner preserves their current data and image cache.
 - If IoT succeeds but MongoDB fails, polling retries completion with fresh IoT
-  proof. It never rolls back the physical transfer by resetting the device.
+  proof. Partial writes are accepted: old paper links may already be detached,
+  and the old device may be removed before insertion fails. No database rollback
+  or transaction is used. Polling does not reset IoT; explicitly choosing Start
+  again can reset an active orphan, as accepted for recovery.
 
 ## WLAN and the UI
 
@@ -57,12 +62,17 @@ No physical device, production API or production database is used by these tests
 
 ```sh
 node_modules/.bin/vitest run --config packages/paperlesspaper-web/vitest.config.ts tests/unit/useDeviceActivation.test.tsx tests/unit/bluetoothActivationOrder.test.tsx
-REGISTRATION_TEST_MONGODB_URL='mongodb://127.0.0.1:27184/paperless-registration-test-local?replicaSet=registration-test' node_modules/.bin/vitest run packages/paperlesspaper-api/tests/integration/deviceRegistration.persistence.test.ts
+REGISTRATION_TEST_MONGODB_URL='mongodb://127.0.0.1:27184/paperless-registration-test-local' node_modules/.bin/vitest run packages/paperlesspaper-api/tests/integration/deviceRegistration.persistence.test.ts
 ```
 
-The MongoDB suite requires a disposable replica set/database whose name begins
-with `paperless-registration-test-`. It tests real transactions, rollback,
-idempotent completion, key gating, orphan repair and preservation of papers.
+The MongoDB suite requires a disposable database whose name begins with
+`paperless-registration-test-`; a standalone MongoDB is sufficient. It tests
+partial failures and retry, idempotent completion, key gating, orphan repair,
+cache invalidation and preservation of papers. S3 and IoT are mocked.
+
+The review's log-isolation and hanging-poll regressions remain tracked by their
+failing tests until separately addressed; this document does not claim those
+paths are fixed.
 
 Deploy the API before the updated UI: the new UI deliberately requires
 `registrationCompleted` for e-paper registration success.

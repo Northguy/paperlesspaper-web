@@ -1,5 +1,33 @@
 # Nebenwirkungsprüfung der Geräteaktivierung
 
+## Aktualisierung nach PR-Review vom 14. September 2026
+
+Auf Wunsch wurde die Transaktionsanforderung aus der Geräteaktivierung entfernt.
+Der Ablauf nutzt sequenzielle Schreiboperationen auf einer Standalone-MongoDB;
+Teilfehler ohne Rollback sind akzeptiert. Papers bleiben erhalten, ihre alten
+Verknüpfungen können nach einem Fehler bereits getrennt sein. Polling kann den
+Abschluss mit frischem IoT-Nachweis erneut versuchen. Der Test für „Start again“
+bildet jetzt das bereits akzeptierte Zurücksetzen eines aktiven Orphans ab.
+
+Vor dem Speichern einer neuen Gerätezuordnung wird das bisherige Vergleichsbild
+unter `ePaperDeviceImages/<Seriennummer>.png` gelöscht. Ein Fehler dabei wird
+weitergereicht und beim nächsten Abschluss erneut versucht. Paper-Originale
+und Vorschaubilder bleiben erhalten. Wiederholter Abschluss derselben Zuordnung
+und normaler WLAN-Wechsel löschen diesen Cache nicht. Die drei neuen
+Aktivierungstexte sind jetzt auch auf Niederländisch vorhanden.
+
+Aktuelle Prüfung: **102 Tests bestanden, 2 fehlgeschlagen**; der separate
+Hardwaretest wurde ohne explizite Freigabevariable übersprungen. Die
+Registrierungstests liefen gegen eine isolierte lokale Standalone-MongoDB;
+IoT und S3 waren simuliert. Keine produktiven Daten oder Bilder wurden geändert.
+
+Weiter offen sind die fremden Upload-Logs (Befund 1) und der hängende
+Polling-Request (Befund 4). Die folgende ursprüngliche Prüfung und die
+Hardware-Testnotizen dokumentieren den vorherigen Stand; ihre Aussagen zu
+Transaktionspflicht, Bild-Cache und fehlenden Übersetzungen sind damit überholt.
+
+## Ursprüngliche Prüfung
+
 Geprüfter Stand: `e33f44f`, Branch `feat/device-activation-takeover`.
 Datum: 14. September 2026.
 

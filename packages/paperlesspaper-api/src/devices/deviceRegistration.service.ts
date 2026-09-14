@@ -5,9 +5,9 @@ import {
   usersService,
 } from "@internetderdinge/api";
 import { deviceByDeviceName } from "@paperlesspaper/helpers";
-import mongoose from "mongoose";
 import httpStatus from "http-status";
 import Paper from "../papers/papers.model.js";
+import { resetDeviceImageCache } from "../iotdevice/deviceImageCache.js";
 
 type RegistrationInput = {
   organization: string;
@@ -67,45 +67,39 @@ export async function getRegistrationStatus(
 }
 
 async function completeRegistration(deviceId: string, body: RegistrationInput) {
-  const session = await mongoose.startSession();
-  let createdDevice: any;
-  try {
-    await session.withTransaction(async () => {
-      const previous = await Device.findOne({ deviceId }).session(session);
-      if (belongsTo(previous, body.organization)) {
-        createdDevice = previous;
-        return;
-      }
+  const previous = await Device.findOne({ deviceId });
+  if (belongsTo(previous, body.organization)) return previous;
 
-      const replacement = new Device({
-        deviceId,
-        organization: body.organization,
-        kind: deviceByDeviceName(deviceId)?.id,
-        patient: body.patient || undefined,
-        paper: body.paper || undefined,
-      });
-      await replacement.validate();
+  const replacement = new Device({
+    deviceId,
+    organization: body.organization,
+    kind: deviceByDeviceName(deviceId)?.id,
+    patient: body.patient || undefined,
+    paper: body.paper || undefined,
+  });
+  await replacement.validate();
 
-      if (previous) {
-        // A new database id keeps old upload logs, image paths and outstanding
-        // deactivation receipts attached to the old assignment, not the new owner.
-        await Paper.updateMany(
-          { deviceId: previous._id },
-          { $unset: { deviceId: 1 } },
-          { session }
-        );
-        await Device.deleteOne(
-          { _id: previous._id, organization: previous.organization },
-          { session }
-        );
-      }
-      await replacement.save({ session });
-      createdDevice = replacement;
-    });
-  } finally {
-    await session.endSession();
+  // Clear before saving so a failed deletion is retried by the next completion.
+  // Also covers an orphan or a retry after the old assignment was removed.
+  await resetDeviceImageCache(deviceId);
+  if (previous) {
+    await detachAssignment(previous);
   }
-  return createdDevice;
+  await replacement.save();
+  return replacement;
+}
+
+async function detachAssignment(previous: any) {
+  // Deliberately sequential for standalone MongoDB. A partial failure is
+  // surfaced to the caller; papers are preserved even if a later write fails.
+  await Paper.updateMany(
+    { deviceId: previous._id },
+    { $unset: { deviceId: 1 } }
+  );
+  await Device.deleteOne({
+    _id: previous._id,
+    organization: previous.organization,
+  });
 }
 
 export async function registerDevice(
@@ -157,22 +151,7 @@ export async function registerDevice(
     ) {
       // A definitively inactive IoT device can have a stale local assignment.
       // Pending, a missing key, or an upstream failure must never enter this path.
-      const session = await mongoose.startSession();
-      try {
-        await session.withTransaction(async () => {
-          await Paper.updateMany(
-            { deviceId: existing._id },
-            { $unset: { deviceId: 1 } },
-            { session }
-          );
-          await Device.deleteOne(
-            { _id: existing._id, organization: existing.organization },
-            { session }
-          );
-        });
-      } finally {
-        await session.endSession();
-      }
+      await detachAssignment(existing);
     }
     status = await iotDevicesService.activateDevice(
       deviceId,
@@ -198,8 +177,8 @@ export async function registerDevice(
     };
   }
 
-  // The IoT ownership change cannot share our Mongo transaction. If Mongo fails,
-  // polling can safely retry completion using fresh proof for the target org.
+  // Completion is not atomic. If a write fails, polling can retry with fresh
+  // IoT proof; already detached paper links are not restored.
   const createdDevice = await completeRegistration(deviceId, body);
   return {
     ...publicStatus(status),

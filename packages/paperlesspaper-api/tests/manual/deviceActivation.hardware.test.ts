@@ -3,6 +3,11 @@ import dotenv from "dotenv";
 import mongoose from "mongoose";
 import { expect, it, vi } from "vitest";
 
+// Hardware tests isolate storage effects; never delete a production S3 image.
+vi.mock("../../src/iotdevice/deviceImageCache.js", () => ({
+  resetDeviceImageCache: vi.fn(async () => {}),
+}));
+
 // Manual opt-in only. Local Mongo writes, real IoT calls for one authorized frame.
 const hardware = vi.hoisted(() => ({
   serial: "epd7-e4b0634f3354",
