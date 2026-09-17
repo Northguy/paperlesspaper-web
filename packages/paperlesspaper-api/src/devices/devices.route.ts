@@ -52,11 +52,13 @@ const deviceUploadLogsResponseSchema = z.object({
 
 const deviceDeactivationPreviewSchema = z.object({
   device: z.object({
-    id: z.string(),
+    id: z.string().nullable(),
     deviceId: z.string(),
     kind: z.string().nullable(),
     organizationId: z.string().nullable(),
   }),
+  appDeviceMissing: z.boolean().optional(),
+  warnings: z.array(z.string()).optional(),
   papersToDetach: z.object({
     count: z.number().int().nonnegative(),
     ids: z.array(z.string()),
@@ -153,7 +155,7 @@ export const devicesRouteSpecs: RouteSpec[] = [
     handler: devicesController.deleteByDeviceId,
     summary: "Deactivate Device",
     description:
-      "Admin-only, dry-run-first deactivation by epd DeviceId. A dry run is the default and returns the papers currently attached plus a confirmationToken. Papers and their cross-paper references are preserved. To execute, repeat with dryRun=false and that token. After a confirmed IoT reset, cleanup can be retried with the same token without resetting the device again; a completed request returns its saved result. Cleanup only affects the original database device and detaches its remaining paper references. Change counts describe the successful cleanup attempt.",
+      "Admin-only, dry-run-first deactivation by epd DeviceId. Missing app records produce warnings and do not block IoT deactivation. An optional previousDeviceObjectId from the admin search allows orphaned paper assignments to be detached; without a known app id, papers remain unchanged. A dry run is the default and returns the papers currently attached plus a confirmationToken. Papers and their cross-paper references are preserved. To execute, repeat with dryRun=false and that token. After a confirmed IoT reset, cleanup can be retried with the same token without resetting the device again; a completed request returns its saved result. Cleanup only affects the original database device and detaches its remaining paper references. Change counts describe the successful cleanup attempt.",
   },
 ];
 

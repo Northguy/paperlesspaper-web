@@ -71,6 +71,13 @@ export const deleteDeviceByDeviceIdSchema = {
       }),
   }),
   query: z.object({
+    previousDeviceObjectId: z
+      .string()
+      .regex(/^[a-f0-9]{24}$/i)
+      .optional()
+      .openapi({
+        description: "Historical app device ObjectId from the admin search. Used only if the current app record is missing, to detach orphaned paper assignments.",
+      }),
     dryRun: z.enum(["true", "false"]).default("true").openapi({
       description:
         "Defaults to true. Set to false only after obtaining a confirmationToken from a dry run.",
