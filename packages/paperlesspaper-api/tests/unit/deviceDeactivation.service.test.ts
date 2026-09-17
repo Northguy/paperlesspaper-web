@@ -12,6 +12,8 @@ const mocks = vi.hoisted(() => {
 
   const state = {
     targetPaperIds: ["paper-a", "paper-b"],
+    deviceMissing: false,
+    historicalDevice: null as any,
     receipt: null as any,
   };
   const device = {
@@ -25,6 +27,7 @@ const mocks = vi.hoisted(() => {
   const makeQuery = (getValue: () => unknown) => {
     const query: any = {};
     query.select = vi.fn(() => query);
+    query.sort = vi.fn(() => query);
     query.lean = vi.fn(() => query);
     query.session = vi.fn(() => query);
     query.then = (resolve: (value: unknown) => unknown, reject: unknown) =>
@@ -33,7 +36,10 @@ const mocks = vi.hoisted(() => {
   };
 
   const Device = {
-    findOne: vi.fn(() => makeQuery(() => device)),
+    findOne: vi.fn(() =>
+      makeQuery(() => (state.deviceMissing ? null : device)),
+    ),
+    findById: vi.fn(() => makeQuery(() => state.historicalDevice)),
     deleteOne: vi.fn(async () => ({ deletedCount: 1 })),
   };
   const Paper = {
@@ -53,8 +59,9 @@ const mocks = vi.hoisted(() => {
     findOne: vi.fn((filter: any) =>
       makeQuery(() =>
         state.receipt?.deviceId === filter.deviceId &&
-        state.receipt?.preview.confirmationToken ===
-          filter["preview.confirmationToken"]
+        (!filter["preview.confirmationToken"] ||
+          state.receipt?.preview.confirmationToken ===
+            filter["preview.confirmationToken"])
           ? state.receipt
           : null,
       ),
@@ -126,6 +133,8 @@ describe("device deactivation service", () => {
   beforeEach(() => {
     mocks.state.targetPaperIds = ["paper-a", "paper-b"];
     mocks.state.receipt = null;
+    mocks.state.deviceMissing = false;
+    mocks.state.historicalDevice = null;
     mocks.device.updatedAt = new Date("2026-08-13T08:00:00.000Z");
     vi.clearAllMocks();
     mocks.session.withTransaction.mockImplementation(
@@ -194,6 +203,123 @@ describe("device deactivation service", () => {
     expect(result.updated).toEqual({
       papers: 2,
     });
+  });
+
+  it("deactivates an IoT-only device without querying or updating unassigned papers", async () => {
+    mocks.state.deviceMissing = true;
+    const preview = await service.getDeviceDeactivationPreview(
+      mocks.device.deviceId,
+    );
+    expect(preview).toMatchObject({
+      appDeviceMissing: true,
+      device: { id: null },
+      papersToDetach: { count: 0 },
+    });
+    expect(preview.warnings?.join(" ")).toContain("cannot be identified");
+    expect(mocks.Paper.find).not.toHaveBeenCalled();
+    expect(mocks.iotDevicesService.activateDevice).not.toHaveBeenCalled();
+    const input = {
+      deviceId: mocks.device.deviceId,
+      confirmationToken: preview.confirmationToken,
+    };
+    const result = await service.deactivateDeviceByDeviceId(input);
+    expect(result).toMatchObject({
+      deleted: { devices: 0 },
+      updated: { papers: 0 },
+      iotDeviceDeactivated: true,
+    });
+    expect(mocks.iotDevicesService.activateDevice).toHaveBeenCalledWith(
+      mocks.device.deviceId,
+      null,
+      false,
+      true,
+    );
+    expect(mocks.Paper.updateMany).not.toHaveBeenCalled();
+    expect(mocks.Device.deleteOne).not.toHaveBeenCalled();
+    await expect(service.deactivateDeviceByDeviceId(input)).resolves.toEqual(
+      result,
+    );
+    await expect(
+      service.getDeviceDeactivationPreview(mocks.device.deviceId),
+    ).resolves.toEqual(preview);
+    expect(mocks.iotDevicesService.activateDevice).toHaveBeenCalledTimes(1);
+  });
+
+  it("detaches orphaned papers using the historical app id", async () => {
+    mocks.state.deviceMissing = true;
+    const previousDeviceObjectId = "6a29a2aa5e8355d40e35ca33";
+    const preview = await service.getDeviceDeactivationPreview(
+      mocks.device.deviceId,
+      undefined,
+      previousDeviceObjectId,
+    );
+    expect(preview).toMatchObject({
+      appDeviceMissing: true,
+      device: { id: previousDeviceObjectId },
+      papersToDetach: { count: 2 },
+    });
+    mocks.Device.deleteOne.mockResolvedValueOnce({ deletedCount: 0 });
+    const result = await service.deactivateDeviceByDeviceId({
+      deviceId: mocks.device.deviceId,
+      previousDeviceObjectId,
+      confirmationToken: preview.confirmationToken,
+    });
+    expect(result).toMatchObject({
+      deleted: { devices: 0 },
+      updated: { papers: 2 },
+      iotDeviceDeactivated: true,
+    });
+    expect(mocks.Paper.updateMany).toHaveBeenCalledWith(
+      { deviceId: previousDeviceObjectId },
+      { $unset: { deviceId: 1 } },
+      { session: mocks.session },
+    );
+  });
+
+  it("rejects a historical id belonging to an existing device", async () => {
+    mocks.state.deviceMissing = true;
+    mocks.state.historicalDevice = { deviceId: "epd-another-device" };
+    await expect(
+      service.getDeviceDeactivationPreview(
+        mocks.device.deviceId,
+        undefined,
+        "6a29a2aa5e8355d40e35ca33",
+      ),
+    ).rejects.toMatchObject({ statusCode: 409 });
+    expect(mocks.iotDevicesService.activateDevice).not.toHaveBeenCalled();
+    expect(mocks.Paper.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("requires a fresh preview if the missing device is registered before confirmation", async () => {
+    mocks.state.deviceMissing = true;
+    const preview = await service.getDeviceDeactivationPreview(
+      mocks.device.deviceId,
+    );
+    mocks.state.deviceMissing = false;
+    await expect(
+      service.deactivateDeviceByDeviceId({
+        deviceId: mocks.device.deviceId,
+        confirmationToken: preview.confirmationToken,
+      }),
+    ).rejects.toMatchObject({ statusCode: 409 });
+    expect(mocks.iotDevicesService.activateDevice).not.toHaveBeenCalled();
+  });
+
+  it("does not report success for an IoT-only device when the reset fails", async () => {
+    mocks.state.deviceMissing = true;
+    const preview = await service.getDeviceDeactivationPreview(
+      mocks.device.deviceId,
+    );
+    mocks.iotDevicesService.activateDevice.mockRejectedValueOnce(
+      new Error("IoT unavailable"),
+    );
+    await expect(
+      service.deactivateDeviceByDeviceId({
+        deviceId: mocks.device.deviceId,
+        confirmationToken: preview.confirmationToken,
+      }),
+    ).rejects.toThrow("IoT unavailable");
+    expect(mocks.state.receipt).toBeNull();
   });
 
   it("rejects a confirmation token when the dry-run impact changed", async () => {

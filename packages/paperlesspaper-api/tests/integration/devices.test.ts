@@ -172,6 +172,82 @@ describe("Devices API", () => {
     ]);
   });
 
+  it("deactivates a missing app device and detaches its historical paper assignments", async () => {
+    const { Device, devicesService } = await import("@internetderdinge/api");
+    const papersService = (await import("../../src/papers/papers.service"))
+      .default;
+    const Paper = (await import("../../src/papers/papers.model")).default;
+    const serial = `epd-orphan-${Date.now()}`;
+    const device = await devicesService.createDevice({
+      organization: getSeedData()!.organizationId,
+      deviceId: serial,
+      kind: "epaper-13",
+      meta: {},
+    });
+    const paper = await papersService.createPaper({
+      deviceId: device._id,
+      kind: "calendar",
+      organization: getSeedData()!.organizationId,
+      name: "Orphaned paper",
+      meta: {},
+    });
+    await Device.deleteOne({ _id: device._id });
+    const previousDeviceObjectId = device._id.toString();
+    const url = `${baseUrl}/by-device-id/${serial}`;
+    const preview = await request(getApp())
+      .delete(url)
+      .query({ previousDeviceObjectId })
+      .set("x-api-key", getApiKey())
+      .expect(200);
+    expect(preview.body.preview).toMatchObject({
+      appDeviceMissing: true,
+      device: { id: previousDeviceObjectId },
+      papersToDetach: { count: 1 },
+    });
+    expect(preview.body.preview.warnings.length).toBeGreaterThan(0);
+    const result = await request(getApp())
+      .delete(url)
+      .query({
+        previousDeviceObjectId,
+        dryRun: "false",
+        confirmationToken: preview.body.preview.confirmationToken,
+      })
+      .set("x-api-key", getApiKey())
+      .expect(200);
+    expect(result.body).toMatchObject({
+      iotDeviceDeactivated: true,
+      deleted: { devices: 0 },
+      updated: { papers: 1 },
+    });
+    expect(await Paper.findById(paper._id)).toBeTruthy();
+    expect((await Paper.findById(paper._id))!.deviceId).toBeUndefined();
+  });
+
+  it("deactivates an IoT-only device without a historical app id", async () => {
+    const url = `${baseUrl}/by-device-id/epd-iot-only-${Date.now()}`;
+    const preview = await request(getApp())
+      .delete(url)
+      .set("x-api-key", getApiKey())
+      .expect(200);
+    expect(preview.body.preview).toMatchObject({
+      appDeviceMissing: true,
+      device: { id: null },
+    });
+    const result = await request(getApp())
+      .delete(url)
+      .query({
+        dryRun: "false",
+        confirmationToken: preview.body.preview.confirmationToken,
+      })
+      .set("x-api-key", getApiKey())
+      .expect(200);
+    expect(result.body).toMatchObject({
+      iotDeviceDeactivated: true,
+      deleted: { devices: 0 },
+      updated: { papers: 0 },
+    });
+  });
+
   it("rejects a stale dry-run confirmation token", async () => {
     const app = getApp();
     const apiKey = getApiKey();

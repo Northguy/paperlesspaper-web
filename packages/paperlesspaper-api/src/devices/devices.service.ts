@@ -15,11 +15,13 @@ import DeviceDeactivation from "./deviceDeactivation.model.js";
 
 type DeviceDeactivationPreview = {
   device: {
-    id: string;
+    id: string | null;
     deviceId: string;
     kind: string | null;
     organizationId: string | null;
   };
+  appDeviceMissing?: boolean;
+  warnings?: string[];
   papersToDetach: {
     count: number;
     ids: string[];
@@ -163,26 +165,48 @@ const applySession = <T extends { session: (session: ClientSession) => T }>(
 const getDeviceDeactivationPreview = async (
   deviceId: string,
   session?: ClientSession,
+  previousDeviceObjectId?: string,
 ): Promise<DeviceDeactivationPreview> => {
   const device = await applySession(Device.findOne({ deviceId }), session);
-  if (!device) {
-    throw new ApiError(httpStatus.NOT_FOUND, "Device not found");
+  // Historical ids are only used when the current app device is absent.
+  // Never let a stale search entry target another currently registered device.
+  if (!device && previousDeviceObjectId) {
+    const existing = await applySession(
+      Device.findById(previousDeviceObjectId),
+      session,
+    );
+    if (existing) {
+      throw new ApiError(
+        httpStatus.CONFLICT,
+        "The historical device ID belongs to an existing device. Refresh the search before deactivating.",
+      );
+    }
   }
-
-  const deviceObjectId = device._id.toString();
-  const deactivation = await applySession(
-    DeviceDeactivation.findById(deviceObjectId),
-    session,
-  );
+  const deviceObjectId =
+    device?._id.toString() || previousDeviceObjectId || null;
+  const deactivation = deviceObjectId
+    ? await applySession(DeviceDeactivation.findById(deviceObjectId), session)
+    : await applySession(
+        DeviceDeactivation.findOne({ deviceId }).sort({ updatedAt: -1 }),
+        session,
+      );
   if (deactivation) {
+    if (deactivation.deviceId !== deviceId) {
+      throw new ApiError(
+        httpStatus.CONFLICT,
+        "The historical device ID belongs to another device.",
+      );
+    }
     // After a successful reset, a new dry run must offer the same token so
     // interrupted cleanup can be resumed even if papers were already detached.
     return deactivation.preview as DeviceDeactivationPreview;
   }
-  const relatedPapers = await applySession(
-    Paper.find({ deviceId: device._id }).select("_id").lean(),
-    session,
-  );
+  const relatedPapers = deviceObjectId
+    ? await applySession(
+        Paper.find({ deviceId: deviceObjectId }).select("_id").lean(),
+        session,
+      )
+    : [];
   const paperIds = relatedPapers
     .map((paper: any) => paper._id.toString())
     .sort();
@@ -190,8 +214,9 @@ const getDeviceDeactivationPreview = async (
   const tokenPayload = {
     deviceId,
     deviceObjectId,
+    appDeviceMissing: !device,
     deviceUpdatedAt:
-      device.updatedAt instanceof Date ? device.updatedAt.toISOString() : null,
+      device?.updatedAt instanceof Date ? device.updatedAt.toISOString() : null,
     paperIds,
   };
   const confirmationToken = createHash("sha256")
@@ -202,9 +227,22 @@ const getDeviceDeactivationPreview = async (
     device: {
       id: deviceObjectId,
       deviceId,
-      kind: device.kind || null,
-      organizationId: device.organization?.toString() || null,
+      kind: device?.kind || null,
+      organizationId: device?.organization?.toString() || null,
     },
+    appDeviceMissing: !device,
+    warnings: device
+      ? []
+      : [
+          "The app device record is already missing. This does not prevent IoT reset and deactivation.",
+          ...(deviceObjectId
+            ? [
+                "The historical device ID is used to identify remaining paper assignments.",
+              ]
+            : [
+                "No historical app device ID is available. Paper assignments cannot be identified and will be left unchanged.",
+              ]),
+        ],
     papersToDetach: {
       count: paperIds.length,
       ids: paperIds,
@@ -243,18 +281,27 @@ const isUnsupportedTransactionError = (error: any): boolean =>
 const previewWithTransactionCheck = async (
   deviceId: string,
   confirmationToken: string | undefined,
+  previousDeviceObjectId?: string,
 ): Promise<DeviceDeactivationPreview> => {
   const session = await mongoose.startSession();
   let preview: DeviceDeactivationPreview | undefined;
 
   try {
     await session.withTransaction(async () => {
-      preview = await getDeviceDeactivationPreview(deviceId, session);
+      preview = await getDeviceDeactivationPreview(
+        deviceId,
+        session,
+        previousDeviceObjectId,
+      );
       assertCurrentPreview(preview, confirmationToken);
     });
   } catch (error) {
     if (isUnsupportedTransactionError(error)) {
-      preview = await getDeviceDeactivationPreview(deviceId);
+      preview = await getDeviceDeactivationPreview(
+        deviceId,
+        undefined,
+        previousDeviceObjectId,
+      );
       assertCurrentPreview(preview, confirmationToken);
     } else {
       throw error;
@@ -277,6 +324,9 @@ const deleteDeviceAndDetachPapers = async ({
   // unrelated updatedAt changes must not reject cleanup after that side effect.
   // Pin all writes to the original database id, never a replacement device
   // registered with the same serial while cleanup is being retried.
+  if (!preview.device.id) {
+    return { deleted: { devices: 0 }, updated: { papers: 0 } };
+  }
   const writeOptions = session ? { session } : {};
 
   const paperResult = await Paper.updateMany(
@@ -335,9 +385,11 @@ const deleteDeviceAndDetachPapersAtomically = async ({
 const deactivateDeviceByDeviceId = async ({
   deviceId,
   confirmationToken,
+  previousDeviceObjectId,
 }: {
   deviceId: string;
   confirmationToken?: string;
+  previousDeviceObjectId?: string;
 }): Promise<DeviceDeactivationResult> => {
   if (!confirmationToken) {
     throw new ApiError(
@@ -353,11 +405,18 @@ const deactivateDeviceByDeviceId = async ({
 
   let preview: DeviceDeactivationPreview =
     receipt?.preview ||
-    (await previewWithTransactionCheck(deviceId, confirmationToken));
+    (await previewWithTransactionCheck(
+      deviceId,
+      confirmationToken,
+      previousDeviceObjectId,
+    ));
+
+  const receiptId =
+    preview.device.id || `missing:${deviceId}:${preview.confirmationToken}`;
 
   if (!receipt) {
     // Another request may have saved the reset while we checked the preview.
-    receipt = await DeviceDeactivation.findById(preview.device.id);
+    receipt = await DeviceDeactivation.findById(receiptId);
   }
   if (receipt) {
     assertCurrentPreview(receipt.preview, confirmationToken);
@@ -380,7 +439,7 @@ const deactivateDeviceByDeviceId = async ({
 
     try {
       await DeviceDeactivation.updateOne(
-        { _id: preview.device.id },
+        { _id: receiptId },
         { $setOnInsert: { deviceId, preview } },
         { upsert: true },
       );
@@ -402,7 +461,7 @@ const deactivateDeviceByDeviceId = async ({
       iotDeviceDeactivated: true,
     };
     await DeviceDeactivation.updateOne(
-      { _id: preview.device.id },
+      { _id: receiptId },
       { $set: { result } },
     );
     return result;
