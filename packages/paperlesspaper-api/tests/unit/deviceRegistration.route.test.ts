@@ -21,6 +21,7 @@ vi.mock("../../src/devices/devices.validation.js", () => ({
 vi.mock("@internetderdinge/api", async () => {
   const { Router } = await import("express");
   return {
+    ApiError: class extends Error {},
     auth: () => vi.fn(),
     validateAdmin: vi.fn(),
     validateDevice: vi.fn(),

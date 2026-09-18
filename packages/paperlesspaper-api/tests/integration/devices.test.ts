@@ -306,7 +306,7 @@ describe("Devices API", () => {
     );
   });
 
-  it("rejects non-admin device deactivation dry runs", async () => {
+  it("rejects device deactivation dry runs without an admin or support role", async () => {
     const app = getApp();
     const seed = getSeedData();
     expect(seed).toBeTruthy();
