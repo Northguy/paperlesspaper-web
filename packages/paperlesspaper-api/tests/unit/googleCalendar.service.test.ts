@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+const tokenEndpoint = vi.hoisted(() => vi.fn());
+vi.mock("axios", () => ({ default: { post: tokenEndpoint } }));
+
 const googleApisMock = vi.hoisted(() => {
   const oAuth2Client = {
     setCredentials: vi.fn(),
@@ -34,7 +37,7 @@ vi.mock("googleapis", () => ({
   google: googleApisMock.google,
 }));
 
-import { getCalendarEvents } from "../../src/papers/googleCalendar.service";
+import { getCalendarEvents, updateGoogleCalendarEvents } from "../../src/papers/googleCalendar.service";
 
 describe("googleCalendar.service", () => {
   beforeEach(() => {
@@ -47,6 +50,7 @@ describe("googleCalendar.service", () => {
     googleApisMock.eventsList.mockReset();
     googleApisMock.google.auth.OAuth2.mockClear();
     googleApisMock.google.calendar.mockClear();
+    tokenEndpoint.mockReset();
 
     googleApisMock.calendarListList.mockResolvedValue({
       data: {
@@ -60,6 +64,58 @@ describe("googleCalendar.service", () => {
 
   afterEach(() => {
     vi.useRealTimers();
+  });
+
+  it("keeps a legacy refresh token across repeated expiry and save cycles", async () => {
+    googleApisMock.eventsList.mockResolvedValue({ data: { items: [] } });
+    let paper: any = {
+      kind: "google-calendar",
+      meta: {
+        selectedCalendars: { primary: true },
+        googleCalendar: {
+          access_token: "expired-access",
+          refresh_token: "legacy-refresh",
+          expiry_date: Date.now() - 1,
+        },
+      },
+    };
+    for (let cycle = 1; cycle <= 2; cycle++) {
+      tokenEndpoint.mockResolvedValueOnce({ data: { access_token: `access-${cycle}`, expires_in: 3600 } });
+      const result = await updateGoogleCalendarEvents(paper);
+      // Persist the same metadata patch used by the paper controller and editor.
+      paper = JSON.parse(JSON.stringify({ ...paper, meta: {
+        ...paper.meta,
+        googleCalendar: { ...paper.meta.googleCalendar, ...result.calendarAuth },
+      } }));
+      expect(paper.meta.googleCalendar.refresh_token).toBe("legacy-refresh");
+      expect(paper.meta.googleCalendar.access_token).toBe(`access-${cycle}`);
+      expect(paper.meta.googleCalendar.expiry_date).toBe(Date.now() + 3600000);
+      const request = new URLSearchParams(tokenEndpoint.mock.calls[cycle - 1][1]);
+      expect(request.get("grant_type")).toBe("refresh_token");
+      expect(request.get("refresh_token")).toBe("legacy-refresh");
+      vi.setSystemTime(Date.now() + 3600001);
+    }
+    expect(tokenEndpoint).toHaveBeenCalledTimes(2);
+  });
+
+  it("adopts a rotated refresh token returned by Google", async () => {
+    tokenEndpoint.mockResolvedValueOnce({ data: { access_token: "new-access", refresh_token: "rotated-refresh", expires_in: 3600 } });
+    const result = await updateGoogleCalendarEvents({ kind: "google-calendar", meta: {
+      googleCalendar: { access_token: "expired", refresh_token: "old-refresh", expiry_date: Date.now() - 1 },
+    } });
+    expect(result.calendarAuth.refresh_token).toBe("rotated-refresh");
+  });
+
+  it("does not attach a previous account's refresh token to a fresh code exchange", async () => {
+    tokenEndpoint.mockResolvedValueOnce({ data: { access_token: "other-account-access", expires_in: 3600 } });
+    const result = await updateGoogleCalendarEvents({ kind: "google-calendar", meta: {
+      code: "fresh-account-code",
+      googleCalendar: { access_token: "old-access", refresh_token: "old-account-refresh" },
+    } });
+    expect(result.calendarAuth.refresh_token).toBeUndefined();
+    expect(googleApisMock.oAuth2Client.setCredentials).toHaveBeenLastCalledWith({
+      access_token: "other-account-access", refresh_token: undefined,
+    });
   });
 
   it("returns the earliest events across selected calendars before applying maxEvents", async () => {

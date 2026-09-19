@@ -127,7 +127,9 @@ export async function generateAuthToken(params: GenerateAuthTokenParams): Promis
     const { access_token, refresh_token, id_token, expires_in, expiry_date } = tokenResponse.data;
     return {
       access_token,
-      refresh_token,
+      // Refresh responses usually omit this; keep the token used for this grant.
+      // A fresh authorization-code exchange must not borrow another account's token.
+      refresh_token: refresh_token || refreshToken,
       id_token,
       expires_in,
       expiry_date: toExpiryDate(expires_in, expiry_date),
