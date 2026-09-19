@@ -48,7 +48,9 @@ function GoogleLoginWrapper() {
 
   const login = useGoogleLogin({
     flow: "auth-code",
-    scope: "https://www.googleapis.com/auth/calendar",
+    scope: GOOGLE_SCOPES.join(" "),
+    // Do not carry historical Calendar write permissions into new tokens.
+    include_granted_scopes: false,
     // prompt: "consent",
     // access_type: "offline",
 
