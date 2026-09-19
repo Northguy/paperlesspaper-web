@@ -45,6 +45,17 @@ export default function IntegrationPreview({
     const contentWindow = iframeRef.current?.contentWindow;
     if (!contentWindow) return;
 
+
+    contentWindow.postMessage(
+      {
+        cmd: "message",
+        type: "INIT",
+        data: initData,
+      },
+      "*"
+    );
+
+    // Apply current calendar data after initialization, which may contain an older snapshot.
     if (calendarPostData) {
       contentWindow.postMessage(
         {
@@ -55,15 +66,6 @@ export default function IntegrationPreview({
         "*"
       );
     }
-
-    contentWindow.postMessage(
-      {
-        cmd: "message",
-        type: "INIT",
-        data: initData,
-      },
-      "*"
-    );
   }, [calendarPostData, initData]);
 
   useEffect(() => {
