@@ -43,8 +43,8 @@ export default function IntegrationPreview({
 
   const postMessages = useCallback(() => {
     const contentWindow = iframeRef.current?.contentWindow;
-    if (!contentWindow) return;
-
+    if (!contentWindow || !isHttpUrl(url)) return;
+    const targetOrigin = new URL(url).origin;
 
     contentWindow.postMessage(
       {
@@ -52,7 +52,7 @@ export default function IntegrationPreview({
         type: "INIT",
         data: initData,
       },
-      "*"
+      targetOrigin
     );
 
     // Apply current calendar data after initialization, which may contain an older snapshot.
@@ -63,10 +63,10 @@ export default function IntegrationPreview({
           type: "GOOGLECALENDAR",
           data: { calendarData: calendarPostData },
         },
-        "*"
+        targetOrigin
       );
     }
-  }, [calendarPostData, initData]);
+  }, [calendarPostData, initData, url]);
 
   useEffect(() => {
     setIframeLoadingError(false);
@@ -96,6 +96,7 @@ export default function IntegrationPreview({
     return (
       <div className={styles.iframeContainer}>
         <iframe
+          key={url}
           className={styles.iframePreview}
           src={url}
           style={{

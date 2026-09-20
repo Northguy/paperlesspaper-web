@@ -289,6 +289,7 @@ export default function imageEditorTools({
     width,
     crossOrigin,
     fit,
+    iconColor,
   }: {
     url: string;
     previewUrl?: string;
@@ -296,6 +297,7 @@ export default function imageEditorTools({
     width?: number;
     crossOrigin?: "anonymous" | "" | null;
     fit?: "cover";
+    iconColor?: string | null;
   }) => {
     if (!url || !fabricRef?.current) return null;
 
@@ -319,6 +321,8 @@ export default function imageEditorTools({
     if (!img) return null;
     const canvas = fabricRef.current;
     const canvasSize = getCanvasSize();
+
+    if (iconColor) img.set("iconColor", iconColor);
 
     setEditorImageSourceMetadata(
       img,

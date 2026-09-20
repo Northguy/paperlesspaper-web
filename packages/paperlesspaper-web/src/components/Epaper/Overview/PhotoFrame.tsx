@@ -5,6 +5,10 @@ import {
   useLocaleDate,
   useVisibility,
 } from "@internetderdinge/web";
+import {
+  contentMatchesPushIntegration,
+  samePushIntegration,
+} from "helpers/integrationPush";
 import classNames from "classnames";
 import { devicesApi } from "ducks/devices";
 import { papersApi } from "ducks/ePaper/papersApi";
@@ -76,7 +80,7 @@ export default function PhotoFrame({
   const activeUserDevices = useActiveUserDevice();
   const foreground = useVisibility();
   const isDebug = useDebug();
-  const params = useParams<{ kind?: string; entry?: string }>();
+  const params = useParams<{ kind?: string; entry?: string; paper?: string }>();
   const localeDate = useLocaleDate();
   const isPrimary = variant === "primary";
   const isPreview = variant === "preview";
@@ -234,12 +238,27 @@ export default function PhotoFrame({
   const shouldShowEmptyMessage = Boolean(
     components?.EmptyMessage && showEmpty && showEmpty(store)
   );
+  const pushPaperId =
+    paper?.id || (params.paper !== "new" ? params.paper : undefined);
+  const pushPreviewAllowed =
+    isPreview &&
+    Boolean(pushPaperId) &&
+    samePushIntegration(watchAll, paper, urlWithParams);
+  const pushSource = papersApi.useGetIntegrationPushContentQuery(
+    { paperId: pushPaperId },
+    { skip: !pushPreviewAllowed, pollingInterval: isPreview ? 15000 : 0 }
+  );
   const previewInitData = useMemo<Record<string, unknown>>(
     () => ({
       ...paper,
+      integrationContent:
+        pushPreviewAllowed &&
+        contentMatchesPushIntegration(paper, pushSource.currentData)
+          ? pushSource.currentData?.content
+          : undefined,
       meta: { ...paper?.meta, ...watchAll?.meta },
     }),
-    [paper, watchAll?.meta]
+    [paper, watchAll?.meta, pushPreviewAllowed, pushSource.currentData]
   );
 
   const currentImageUrl = image.data?.signedUrl;

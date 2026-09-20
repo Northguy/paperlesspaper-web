@@ -17,6 +17,10 @@ import { deviceByKind } from "helpers/devices/deviceList";
 import { createIntegrationInstallSession } from "helpers/integrationInstallSession";
 import { usePublicIntegrations } from "ducks/publicIntegrationsApi";
 
+const telegramIntegrationConfigUrl =
+  import.meta.env.REACT_APP_TELEGRAM_INTEGRATION_CONFIG_URL ||
+  "https://telegram.paperlesspaper.de/config.json";
+
 type SelectableIntegrationApp = {
   id: string;
   name: string;
@@ -173,13 +177,31 @@ export default function SelectApplicationModal({
         .filter((app) => matchesIntegrationSearch(app, search)),
     [search],
   );
-  const communityIntegrations = React.useMemo<SelectableIntegrationApp[]>(
-    () =>
-      publicIntegrationApps.filter((app) =>
-        matchesIntegrationSearch(app, search),
-      ),
-    [publicIntegrationApps, search],
-  );
+  const communityIntegrations = React.useMemo<
+    SelectableIntegrationApp[]
+  >(() => {
+    const apps = publicIntegrationApps.some(
+      (app) => app.pluginConfigUrl === telegramIntegrationConfigUrl,
+    )
+      ? publicIntegrationApps
+      : [
+          {
+            id: "telegram",
+            name: "Telegram",
+            description: t(
+              "Photos and text messages from Telegram, with delivery feedback.",
+            ),
+            icon: new URL("./assets/icon.png", telegramIntegrationConfigUrl)
+              .href,
+            editorKind: "plugin",
+            pluginConfigUrl: telegramIntegrationConfigUrl,
+            translate: false,
+            status: "beta",
+          },
+          ...publicIntegrationApps,
+        ];
+    return apps.filter((app) => matchesIntegrationSearch(app, search));
+  }, [publicIntegrationApps, search, t]);
   const hasVisibleIntegrations =
     highlightedIntegrations.length > 0 ||
     regularIntegrations.length > 0 ||

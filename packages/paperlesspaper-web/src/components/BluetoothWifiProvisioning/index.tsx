@@ -40,7 +40,7 @@ const bluetoothDebugScreens = [
   { value: "networks-display", label: "Select Wi-Fi network" },
   { value: "network-password", label: "Enter Wi-Fi password" },
   { value: "wifi-written", label: "Wi-Fi setup completed" },
-  { value: "bluetooth-disabled", label: "Bluetooth not allowed" },
+  { value: "bluetooth-disabled", label: "Bluetooth is turned off" },
   { value: "location-error", label: "Location sharing required" },
   { value: "networks-not-found", label: "No Wi-Fi networks" },
   { value: "permission-error", label: "No Bluetooth permission" },
@@ -240,6 +240,15 @@ export default function BluetoothWifiProvisioning({
     if (isDebugPreview) return;
     void bluetoothWifiProvisioning.openLocationSettings();
   };
+
+  const requestEnable = () => {
+    if (isDebugPreview) return;
+    void bluetoothWifiProvisioning.requestEnable();
+  };
+
+  const permissionMessage =
+    displayedConnectionError?.error?.message ||
+    displayedConnectionError?.error?.errorMessage;
 
   const watchFields = watch();
 
@@ -595,16 +604,36 @@ export default function BluetoothWifiProvisioning({
           }
         >
           <p>
-            <Trans>Bluetooth not allowed</Trans>
+            <Trans>Bluetooth is turned off</Trans>
             <small>
-              <Trans>Please ensure that Bluetooth is enabled.</Trans>
+              {bluetoothWifiProvisioning.isIos ? (
+                <Trans>
+                  Enable Bluetooth in Settings &gt; Bluetooth. Setup will resume
+                  when you return.
+                </Trans>
+              ) : bluetoothWifiProvisioning.canRequestEnable ? (
+                <Trans>Enable Bluetooth to set up Wi-Fi.</Trans>
+              ) : (
+                <Trans>Enable Bluetooth in Settings, then try again.</Trans>
+              )}
             </small>
+            {bluetoothWifiProvisioning.canRequestEnable && (
+              <Button
+                onClick={requestEnable}
+                disabled={bluetoothWifiProvisioning.isRequestingEnable}
+                className={styles.pressedButton}
+                large
+              >
+                <Trans>Turn on Bluetooth</Trans>
+              </Button>
+            )}
             <Button
-              onClick={openAppSettings}
+              onClick={initializeBle}
+              disabled={bluetoothWifiProvisioning.isRequestingEnable}
               className={styles.pressedButton}
               large
             >
-              <Trans>Open app settings</Trans>
+              <Trans>Try again</Trans>
             </Button>
           </p>
           <DebugErrorDetails
@@ -690,8 +719,8 @@ export default function BluetoothWifiProvisioning({
           />
         </InfoWrapper>
       ) : displayedConnectionState === "ble-error" &&
-        displayedConnectionError?.error?.errorMessage ===
-          "BLE permission denied" ? (
+        (permissionMessage === "BLE permission denied" ||
+          permissionMessage === "Permission denied.") ? (
         <InfoWrapper
           bottom={bottom}
           image={

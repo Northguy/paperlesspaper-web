@@ -1,4 +1,14 @@
 {
+  "Download": "Download",
+  "Download image": "Download image",
+  "In which format would you like to download the image?": "In which format would you like to download the image?",
+  "Choose Save Image or your photos app in the share menu to save the image to your gallery.": "Choose Save Image or your photos app in the share menu to save the image to your gallery.",
+  "The image is saved to Downloads. Open it there and use Share or Save Image to add it to your gallery.": "The image is saved to Downloads. Open it there and use Share or Save Image to add it to your gallery.",
+  "Preparing image…": "Preparing image…",
+  "Image downloaded.": "Image downloaded.",
+  "The image could not be saved. Please try again.": "The image could not be saved. Please try again.",
+  "Save / Share": "Save / Share",
+  "Download file": "Download file",
   "Frame color": "Frame color",
   "Choose the color of the picture frame shown in the app.": "Choose the color of the picture frame shown in the app.",
   "Black": "Black",
@@ -598,5 +608,15 @@
   "PRINTER_API_KEY_STORED": "Copy and store this API key securely now. For security reasons, you may not be able to view it again. You can manage keys in your <accountLink>account settings</accountLink>.",
   "Press the button on the device once, or wait for the Wi-Fi setup to confirm activation.": "Press the button on the device once, or wait for the Wi-Fi setup to confirm activation.",
   "Activation was not confirmed within five minutes. Please try again. An already active device remains with its previous organization.": "Activation was not confirmed within five minutes. Please try again. An already active device remains with its previous organization.",
-  "Device ownership could not be confirmed": "Device ownership could not be confirmed"
+  "Device ownership could not be confirmed": "Device ownership could not be confirmed",
+  "Bluetooth is turned off": "Bluetooth is turned off",
+  "Enable Bluetooth to set up Wi-Fi.": "Enable Bluetooth to set up Wi-Fi.",
+  "Enable Bluetooth in Settings, then try again.": "Enable Bluetooth in Settings, then try again.",
+  "Turn on Bluetooth": "Turn on Bluetooth",
+  "Try again": "Try again",
+  "Enable Bluetooth in Settings > Bluetooth. Setup will resume when you return.": "Enable Bluetooth in Settings > Bluetooth. Setup will resume when you return.",
+  "Photos and text messages from Telegram, with delivery feedback.": "Photos and text messages from Telegram, with delivery feedback.",
+  "Revoke this integration's write access": "Revoke this integration's write access",
+  "Write access revoked. Reopen settings to reconnect.": "Write access revoked. Reopen settings to reconnect.",
+  "Could not revoke write access. Please try again.": "Could not revoke write access. Please try again."
 }

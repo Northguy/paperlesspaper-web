@@ -60,9 +60,10 @@ it("continues polling unchanged pending responses with the target organization",
   ).toBe(true);
   expect(hook.result.current.response.data).toEqual(success);
   await act(async () => {
-    await vi.advanceTimersByTimeAsync(8000);
+    await vi.advanceTimersByTimeAsync(304000);
   });
   expect(register).toHaveBeenCalledTimes(4);
+  expect(hook.result.current.response.data).toEqual(success);
   hook.unmount();
   expect(vi.getTimerCount()).toBe(0);
 });
@@ -186,9 +187,35 @@ it("leaves pending after five minutes even when an HTTP polling request never se
       await vi.advanceTimersByTimeAsync(304000);
     });
     expect(hook.result.current.time).toBe(0);
-    expect(hook.result.current.response.data.activation_status).not.toBe(
-      "pending"
-    );
+    expect(hook.result.current.response.data.activation_status).toBe("timeout");
+  } finally {
+    hook.unmount();
+  }
+});
+
+it("ignores a successful polling response that arrives after the deadline", async () => {
+  const register = api(pending);
+  const hook = renderHook(() => useDeviceActivation(register, "org-b"));
+  let resolve: (value: unknown) => void;
+  try {
+    await act(async () => {
+      await hook.result.current.start(values);
+    });
+    register.mockImplementationOnce(() => ({
+      unwrap: () =>
+        new Promise((done) => {
+          resolve = done;
+        }),
+    }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(304000);
+    });
+    expect(hook.result.current.response.data.activation_status).toBe("timeout");
+    await act(async () => {
+      resolve!(success);
+    });
+    expect(hook.result.current.response.data.activation_status).toBe("timeout");
+    expect(register).toHaveBeenCalledTimes(2);
   } finally {
     hook.unmount();
   }

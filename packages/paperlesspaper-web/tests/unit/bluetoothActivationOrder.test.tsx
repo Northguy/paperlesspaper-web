@@ -3,6 +3,8 @@ import React, { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
+vi.mock("@capacitor/app", () => ({ App: { addListener: vi.fn() } }));
+
 const ble = vi.hoisted(() => ({
   initialize: vi.fn(),
   setDisplayStrings: vi.fn(),
