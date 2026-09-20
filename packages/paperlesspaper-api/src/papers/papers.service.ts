@@ -470,10 +470,18 @@ const uploadSingleImageFromWebsite = async ({
     pipelineTimings.integrationPreparationMs =
       Date.now() - integrationPreparationStartedAt;
 
+    const { getIntegrationRenderContent } = await import(
+      "../integrationPush/content.js"
+    );
+    const integrationContent = await getIntegrationRenderContent(paper);
     const payload = {
+      integrationContent,
       calendarData,
+      meta: { language: paper.meta?.language },
       settings: paper.meta?.pluginSettings || {},
       nativeSettings: {
+        color:
+          paper.meta?.color || paper.meta?.pluginManifest?.nativeSettings?.color,
         orientation: paper.meta?.orientation,
         quality: paper.meta?.quality,
         lut: paper.meta?.lut,
@@ -510,6 +518,14 @@ const uploadSingleImageFromWebsite = async ({
         kind: device?.kind,
         timezone: paper.meta?.pluginManifest?.timezone,
       });
+      if (
+        integrationContent &&
+        renderResult.diagnostics?.pageState?.status === "error"
+      ) {
+        throw new Error(
+          "Integration content could not be rendered; shorten the text or resend the photo",
+        );
+      }
       originalBuffer = renderResult.buffer;
       size = renderResult.size;
       renderDiagnostics = renderResult.diagnostics;
@@ -567,6 +583,7 @@ const uploadSingleImageFromWebsite = async ({
       triggerMetadata: {
         paperKind: paper.kind,
         sourcePaperId: paperId.toString(),
+        integrationRevision: integrationContent?.revision,
         parentPaperId: parentPaperId?.toString(),
       },
       attemptStartedAt: pipelineStartedAt,

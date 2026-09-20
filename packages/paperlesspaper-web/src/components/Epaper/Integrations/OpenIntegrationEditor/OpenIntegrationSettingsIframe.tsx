@@ -14,6 +14,7 @@ type Props = {
   height?: number;
   onHeight?: (height: number) => void;
   onSettingsUpdate?: (settingsPatch: Record<string, any>) => void;
+  onConnectionRequest?: () => Promise<{ grant: string }>;
   initMessage: OpenIntegrationAppToPluginMessage;
   redirectMessage?: OpenIntegrationAppToPluginMessage;
 };
@@ -24,6 +25,7 @@ export default function OpenIntegrationSettingsIframe({
   height,
   onHeight,
   onSettingsUpdate,
+  onConnectionRequest,
   initMessage,
   redirectMessage,
 }: Props) {
@@ -41,8 +43,31 @@ export default function OpenIntegrationSettingsIframe({
       // Strict origin check when possible.
       if (origin && event.origin !== origin) return;
 
-      const data = event.data as OpenIntegrationPluginToAppMessage | any;
+      const data = event.data as OpenIntegrationPluginToAppMessage;
       if (!data || typeof data !== "object") return;
+
+      if (
+        data.source === "paperlesspaper-plugin" &&
+        data.type === "REQUEST_CONNECTION" &&
+        typeof data.payload?.requestId === "string" &&
+        data.payload.requestId.length <= 100
+      ) {
+        const reply = (payload: Record<string, unknown>) => {
+          (event.source as Window)?.postMessage(
+            {
+              source: "paperlesspaper-app",
+              type: "CONNECTION_GRANT",
+              payload: { requestId: data.payload.requestId, ...payload },
+            },
+            event.origin
+          );
+        };
+        if (!onConnectionRequest) reply({ error: "Content push unavailable" });
+        else
+          void onConnectionRequest()
+            .then(reply)
+            .catch(() => reply({ error: "Save the paper and reconnect" }));
+      }
 
       if (
         data.source === "paperlesspaper-plugin" &&
@@ -64,13 +89,12 @@ export default function OpenIntegrationSettingsIframe({
 
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [origin, onHeight, onSettingsUpdate]);
+  }, [origin, onHeight, onSettingsUpdate, onConnectionRequest]);
 
   const post = React.useCallback(
     (msg: OpenIntegrationAppToPluginMessage) => {
       const win = iframeRef.current?.contentWindow;
 
-      console.log("Posting message to iframe", { msg, origin });
       if (!win) return;
       win.postMessage(msg, origin || "*");
 
@@ -82,7 +106,7 @@ export default function OpenIntegrationSettingsIframe({
         win.postMessage({ cmd: "redirect", data: msg.payload }, origin || "*");
       }
     },
-    [origin],
+    [origin]
   );
 
   React.useEffect(() => {

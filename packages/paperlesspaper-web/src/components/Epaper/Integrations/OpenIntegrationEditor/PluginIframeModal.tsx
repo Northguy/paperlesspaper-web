@@ -20,13 +20,18 @@ const PluginIframeModal = () => {
   const params = useParams<any>();
 
   const [createToken] = papersApi.useCreatePluginRedirectTokenMutation();
+  const [createPushGrant] = papersApi.useCreateIntegrationPushGrantMutation();
+  const [revokePushConnection] =
+    papersApi.useRevokeIntegrationPushConnectionMutation();
+  const [revoked, setRevoked] = React.useState(false);
+  const [connectionNotice, setConnectionNotice] = React.useState("");
 
   const configUrl = String(form.watch?.(CONFIG_URL_PATH) || "");
   const manifest = form.watch?.(MANIFEST_PATH) as
     | OpenIntegrationManifest
     | undefined;
   const settingsPage = String(
-    form.watch?.(SETTINGS_PAGE_PATH) || manifest?.settingsPage || "",
+    form.watch?.(SETTINGS_PAGE_PATH) || manifest?.settingsPage || ""
   );
   const resolvedSettingsPage = React.useMemo(() => {
     if (!settingsPage) return "";
@@ -41,6 +46,11 @@ const PluginIframeModal = () => {
 
   const paperId =
     params?.paper && params.paper !== "new" ? params.paper : undefined;
+
+  React.useEffect(() => {
+    setRevoked(false);
+    setConnectionNotice("");
+  }, [paperId, configUrl]);
 
   const [height, setHeight] = React.useState<number>(520);
 
@@ -121,11 +131,27 @@ const PluginIframeModal = () => {
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <OpenIntegrationSchemaForm schema={manifest.formSchema} />
-
-          {resolvedSettingsPage && (
+          {resolvedSettingsPage && !revoked && (
             <OpenIntegrationSettingsIframe
+              key={`${paperId}:${configUrl}`}
               url={resolvedSettingsPage}
               expectedOrigin={expectedOrigin}
+              onConnectionRequest={
+                manifest.capabilities?.contentPush && paperId
+                  ? async () => {
+                      if (
+                        new URL(resolvedSettingsPage).origin !==
+                        new URL(configUrl).origin
+                      )
+                        throw new Error("Integration origin mismatch");
+                      return createPushGrant({
+                        paperId,
+                        configUrl,
+                        settingsPage: resolvedSettingsPage,
+                      }).unwrap();
+                    }
+                  : undefined
+              }
               height={height}
               onHeight={(h) => setHeight(Math.min(Math.max(h, 240), 1400))}
               onSettingsUpdate={(patch) => {
@@ -135,6 +161,31 @@ const PluginIframeModal = () => {
               initMessage={initMessage}
               redirectMessage={redirectMessage || undefined}
             />
+          )}
+          {manifest.capabilities?.contentPush && paperId && !revoked && (
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  await revokePushConnection({ paperId }).unwrap();
+                  setRevoked(true);
+                  setConnectionNotice(
+                    "Write access revoked. Reopen settings to reconnect."
+                  );
+                } catch {
+                  setConnectionNotice(
+                    "Could not revoke write access. Please try again."
+                  );
+                }
+              }}
+            >
+              <Trans>Revoke this integration&apos;s write access</Trans>
+            </button>
+          )}
+          {connectionNotice && (
+            <p role="status">
+              <Trans>{connectionNotice}</Trans>
+            </p>
           )}
         </div>
       )}

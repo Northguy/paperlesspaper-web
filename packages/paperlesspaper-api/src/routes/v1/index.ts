@@ -5,6 +5,7 @@ import renderRoute from "../../render/render.route";
 import supportRoute from "../../support/support.route";
 import { adminSearchRoute } from "@internetderdinge/api";
 import devicesRoute from "../../devices/devices.route";
+import integrationPushRoute from "../../integrationPush/route.js";
 import {
   usersRoute,
   accountsRoute,
@@ -19,6 +20,7 @@ router.use("/users", usersRoute);
 router.use("/accounts", accountsRoute);
 router.use("/organizations", organizationsRoute);
 router.use("/devices", devicesRoute);
+router.use("/integration-papers", integrationPushRoute);
 router.use("/devicesNotifications", devicesNotificationsRoute);
 router.use("/tokens", tokensRoute);
 router.use("/papers", papersRoute);

@@ -251,6 +251,8 @@ const Editor = ({ image }: any) => {
           return {
             ...base,
             memoElementType: (this as any).memoElementType,
+            iconColor: (this as any).iconColor,
+            artworkAttribution: (this as any).artworkAttribution,
             qrConfig: (this as any).qrConfig,
             qrPixelSize: (this as any).qrPixelSize,
             ...memoImageSourceProps,

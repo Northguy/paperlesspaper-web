@@ -1,4 +1,14 @@
 {
+  "Download": "Herunterladen",
+  "Download image": "Bild herunterladen",
+  "In which format would you like to download the image?": "In welchem Format möchtest du das Bild herunterladen?",
+  "Choose Save Image or your photos app in the share menu to save the image to your gallery.": "Wähle im Teilen-Menü „Bild sichern“ oder deine Fotos-App, um das Bild in deiner Galerie zu speichern.",
+  "The image is saved to Downloads. Open it there and use Share or Save Image to add it to your gallery.": "Das Bild wird unter Downloads gespeichert. Öffne es dort und wähle „Teilen“ oder „Bild sichern“, um es zur Galerie hinzuzufügen.",
+  "Preparing image…": "Bild wird vorbereitet …",
+  "Image downloaded.": "Bild heruntergeladen.",
+  "The image could not be saved. Please try again.": "Das Bild konnte nicht gespeichert werden. Bitte versuche es erneut.",
+  "Save / Share": "Speichern / Teilen",
+  "Download file": "Datei herunterladen",
   "Frame color": "Rahmenfarbe",
   "Choose the color of the picture frame shown in the app.": "Wähle die Farbe des in der App dargestellten Bilderrahmens.",
   "Black": "Schwarz",
@@ -53,7 +63,6 @@
   "Change organization": "Organisation wechseln",
   "Address": "Anschrift",
   "Incompatibilities": "Unverträglichkeiten",
-
   "Notes": "Anmerkungen",
   "Save": "Speichern",
   "Print": "Drucken",
@@ -236,10 +245,8 @@
   "Get started": "Los geht's!",
   "Create a organization or get invited by another user.": "Erstelle eine Organisation oder werde von einem anderen Benutzer eingeladen.",
   "Create patient": "Patient anlegen",
-
   "Timezone": "Zeitzone",
   "Select the timezone where the device is in use": "Wähle die Zeitzone in der das Gerät verwendet wird",
-
   "Add anyway": "Trotzdem hinzufügen",
   "Manage": "Verwalten",
   "Device successfully activated": "Gerät erfolgreich aktiviert",
@@ -803,5 +810,15 @@
   "PRINTER_API_KEY_STORED": "Kopiere und speichere diesen API-Schlüssel jetzt sicher. Aus Sicherheitsgründen ist es möglich, dass du ihn nicht erneut einsehen kannst. Du kannst Schlüssel in deinen <accountLink>Kontoeinstellungen</accountLink> verwalten.",
   "Press the button on the device once, or wait for the Wi-Fi setup to confirm activation.": "Drücke einmal die Taste am Gerät oder warte, bis die WLAN-Einrichtung die Aktivierung bestätigt.",
   "Activation was not confirmed within five minutes. Please try again. An already active device remains with its previous organization.": "Die Aktivierung wurde nicht innerhalb von fünf Minuten bestätigt. Bitte versuche es erneut. Ein bereits aktiviertes Gerät bleibt seiner bisherigen Organisation zugeordnet.",
-  "Device ownership could not be confirmed": "Die Gerätezuordnung konnte nicht bestätigt werden"
+  "Device ownership could not be confirmed": "Die Gerätezuordnung konnte nicht bestätigt werden",
+  "Bluetooth is turned off": "Bluetooth ist ausgeschaltet",
+  "Enable Bluetooth to set up Wi-Fi.": "Aktiviere Bluetooth, um WLAN einzurichten.",
+  "Enable Bluetooth in Settings, then try again.": "Aktiviere Bluetooth in den Einstellungen und versuche es erneut.",
+  "Turn on Bluetooth": "Bluetooth einschalten",
+  "Try again": "Erneut versuchen",
+  "Enable Bluetooth in Settings > Bluetooth. Setup will resume when you return.": "Aktiviere Bluetooth unter Einstellungen > Bluetooth. Zurück in der App geht es automatisch weiter.",
+  "Photos and text messages from Telegram, with delivery feedback.": "Fotos und Textnachrichten aus Telegram, mit Rückmeldung zur Übertragung.",
+  "Revoke this integration's write access": "Schreibzugriff dieser Integration widerrufen",
+  "Write access revoked. Reopen settings to reconnect.": "Schreibzugriff widerrufen. Zum erneuten Verbinden die Einstellungen neu öffnen.",
+  "Could not revoke write access. Please try again.": "Schreibzugriff konnte nicht widerrufen werden. Bitte erneut versuchen."
 }

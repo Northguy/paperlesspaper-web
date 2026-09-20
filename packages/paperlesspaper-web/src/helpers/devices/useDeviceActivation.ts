@@ -35,7 +35,20 @@ export function useDeviceActivation(register: any, organization?: string) {
   useEffect(() => {
     const tick = setInterval(() => {
       if (deadline.current) {
-        setTime(Math.max(0, Math.ceil((deadline.current - Date.now()) / 1000)));
+        const remaining = Math.max(
+          0,
+          Math.ceil((deadline.current - Date.now()) / 1000)
+        );
+        setTime(remaining);
+        if (remaining === 0) {
+          // A hung request must not keep activation pending or succeed after expiry.
+          run.current += 1;
+          clearTimeout(timer.current);
+          deadline.current = undefined;
+          request.current = undefined;
+          setError(undefined);
+          setResponse({ data: { activation_status: "timeout" } });
+        }
       }
     }, 1000);
     return () => clearInterval(tick);
@@ -55,6 +68,9 @@ export function useDeviceActivation(register: any, organization?: string) {
       };
     }
     setResponse({ data });
+    if (!["pending", "device_confirmed"].includes(data.activation_status)) {
+      deadline.current = undefined;
+    }
     return data;
   };
 
@@ -105,13 +121,10 @@ export function useDeviceActivation(register: any, organization?: string) {
       const result = accept(data);
       // Start the local upper bound after acknowledgement, so network/reset
       // latency cannot make us time out before IoT's own activation window.
-      deadline.current = Date.now() + WINDOW_MS;
       setTime(300);
-      if (
-        !deferPolling &&
-        ["pending", "device_confirmed"].includes(result.activation_status)
-      ) {
-        schedule(attempt);
+      if (["pending", "device_confirmed"].includes(result.activation_status)) {
+        deadline.current = Date.now() + WINDOW_MS;
+        if (!deferPolling) schedule(attempt);
       }
       return result;
     } catch (failure) {

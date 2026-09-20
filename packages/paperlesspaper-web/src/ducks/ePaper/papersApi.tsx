@@ -31,6 +31,28 @@ export const papersApi: any = generateCrudApi({
     return tags;
   },
   endpoints: (builder) => ({
+    createIntegrationPushGrant: builder.mutation({
+      query: ({ paperId, configUrl, settingsPage }) => ({
+        url: `integration-papers/papers/${paperId}/grants`,
+        method: "post",
+        body: { configUrl, settingsPage },
+      }),
+    }),
+    revokeIntegrationPushConnection: builder.mutation({
+      query: ({ paperId }) => ({
+        url: `integration-papers/papers/${paperId}/connection`,
+        method: "delete",
+      }),
+    }),
+    getIntegrationPushContent: builder.query({
+      query: ({ paperId }) => ({
+        url: `integration-papers/papers/${paperId}/content`,
+        method: "get",
+      }),
+      providesTags: (_result, _error, { paperId }) => [
+        { type: "papers", id: paperId },
+      ],
+    }),
     getAllPapersAdmin: builder.query({
       query: () => ({
         url: `papers`,

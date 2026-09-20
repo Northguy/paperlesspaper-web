@@ -31,6 +31,13 @@ mongoose
       logger.info(`Listening to port ${config.port}`);
     });
 
+    // Optional integration processing must not block the existing host schedules.
+    void import("./integrationPush/worker.js")
+      .then(({ startIntegrationPushWorker }) => startIntegrationPushWorker())
+      .catch((err) =>
+        logger.error("Failed to initialize integration processing", err)
+      );
+
     try {
       const { startCronjobs } = await import("./cronjobs/bullmq.start.service");
       await startCronjobs();
