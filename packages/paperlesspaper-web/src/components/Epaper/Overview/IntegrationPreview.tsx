@@ -46,6 +46,16 @@ export default function IntegrationPreview({
     if (!contentWindow || !isHttpUrl(url)) return;
     const targetOrigin = new URL(url).origin;
 
+    contentWindow.postMessage(
+      {
+        cmd: "message",
+        type: "INIT",
+        data: initData,
+      },
+      targetOrigin
+    );
+
+    // Apply current calendar data after initialization, which may contain an older snapshot.
     if (calendarPostData) {
       contentWindow.postMessage(
         {
@@ -56,15 +66,6 @@ export default function IntegrationPreview({
         targetOrigin
       );
     }
-
-    contentWindow.postMessage(
-      {
-        cmd: "message",
-        type: "INIT",
-        data: initData,
-      },
-      targetOrigin
-    );
   }, [calendarPostData, initData, url]);
 
   useEffect(() => {

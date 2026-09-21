@@ -701,5 +701,9 @@
   "We could not set up your frame. Please try again or contact support with your device ID.": "We konden je fotolijst niet instellen. Probeer het opnieuw of neem contact op met support en vermeld je apparaat-ID.",
   "Please wait {{seconds}} seconds": "Wacht {{seconds}} seconden",
   "This is taking a little longer...": "Het duurt blijkbaar iets langer...",
-  "Device is already connected to Wi-Fi": "Het apparaat is al verbonden met wifi"
+  "Device is already connected to Wi-Fi": "Het apparaat is al verbonden met wifi",
+  "Photos and text messages from Telegram, with delivery feedback.": "Foto's en tekstberichten uit Telegram, met feedback over de overdracht.",
+  "Revoke this integration's write access": "Schrijftoegang van deze integratie intrekken",
+  "Write access revoked. Reopen settings to reconnect.": "Schrijftoegang ingetrokken. Open de instellingen opnieuw om weer te verbinden.",
+  "Could not revoke write access. Please try again.": "Schrijftoegang kon niet worden ingetrokken. Probeer het opnieuw."
 }

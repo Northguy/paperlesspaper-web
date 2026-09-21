@@ -57,7 +57,8 @@ function inspectIcon(url: string): Promise<string | null> {
     };
     image.src = url;
   });
-  if (colorCache.size >= 1000) colorCache.delete(colorCache.keys().next().value!);
+  if (colorCache.size >= 1000)
+    colorCache.delete(colorCache.keys().next().value!);
   colorCache.set(url, result);
   return result;
 }
@@ -65,19 +66,35 @@ function inspectIcon(url: string): Promise<string | null> {
 export async function classifyIcons(artworks: Artwork[]): Promise<Artwork[]> {
   const result = [...artworks];
   let index = 0;
-  await Promise.all(
-    Array.from({ length: Math.min(8, result.length) }, async () => {
-      while (index < result.length) {
-        const current = index++;
-        const artwork = result[current];
-        if (artwork.source !== "svgrepo") continue;
-        result[current] = {
-          ...artwork,
-          monochromeColor: await inspectIcon(artwork.image.url),
-        };
-      }
-    }),
-  );
+  let timedOut = false;
+  let timeout: ReturnType<typeof setTimeout>;
+  // Bound the whole page, not five seconds for each successive batch of icons.
+  const budget = new Promise<null>((resolve) => {
+    timeout = setTimeout(() => {
+      timedOut = true;
+      resolve(null);
+    }, 5000);
+  });
+  try {
+    await Promise.all(
+      Array.from({ length: Math.min(8, result.length) }, async () => {
+        while (index < result.length && !timedOut) {
+          const current = index++;
+          const artwork = result[current];
+          if (artwork.source !== "svgrepo") continue;
+          result[current] = {
+            ...artwork,
+            monochromeColor: await Promise.race([
+              inspectIcon(artwork.image.url),
+              budget,
+            ]),
+          };
+        }
+      }),
+    );
+  } finally {
+    clearTimeout(timeout!);
+  }
   return result;
 }
 

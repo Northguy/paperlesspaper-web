@@ -44,6 +44,8 @@ export const createEntry = catchAsync(async (req: Request, res: Response) => {
     ...req.body,
     meta: {
       ...meta,
+      // Authorization codes are single-use; persist the exchanged tokens only.
+      code: undefined,
       calendarData,
       googleCalendar: { ...meta.googleCalendar, ...calendarAuth },
     },
@@ -128,13 +130,11 @@ export const getCalendarPreview = catchAsync(
 
     const mergedMeta: Record<string, any> = {
       ...plainPaper.meta,
+      // Never replay a code retained by an older version of the application.
+      code,
       selectedCalendars:
         selectedCalendars || plainPaper.meta?.selectedCalendars,
     };
-
-    if (code) {
-      mergedMeta.code = code;
-    }
 
     if (googleCalendar && typeof googleCalendar === "object") {
       mergedMeta.googleCalendar = {
@@ -172,6 +172,7 @@ export const updateEntry = catchAsync(async (req: Request, res: Response) => {
     ...req.body,
     meta: {
       ...meta,
+      code: undefined,
       calendarData,
       googleCalendar: { ...meta.googleCalendar, ...calendarAuth },
     },
