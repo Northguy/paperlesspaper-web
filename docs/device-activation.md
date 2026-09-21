@@ -11,11 +11,12 @@ handlers. No change or publication of `@internetderdinge/api` is required.
   local assignment and IoT state. It returns `available: true` and a `mode` of
   `activation`, `takeover`, or `already_registered`. It never resets a device.
 - `POST /devices/registerdevice/:deviceId` with `enable: true` starts activation.
-  An active device with a local assignment must never be reset first. An active
-  orphan without ownership proof is reset only at the explicit start. A fresh
+  Ordinary claiming never resets a device, including an active orphan without
+  local assignment. Missing records and inactive/timeout statuses are not proof
+  of ownership and do not authorize removing an existing assignment. A fresh
   key for the target organization completes registration directly, including
-  after a failed local save, without restarting activation. A definitively inactive device's
-  stale local assignment is removed, with its papers detached but preserved.
+  after a failed local save, without restarting activation. A stale assignment
+  is replaced only after that confirmation, preserving its owner's papers.
 - Polling uses the same authorized organization and `enable: false`. IoT
   `success` without a nonempty key is returned as `timeout`, not completion.
 - `registrationCompleted: true` and `createdDevice` are returned only after IoT
@@ -32,6 +33,9 @@ handlers. No change or publication of `@internetderdinge/api` is required.
   same owner preserves their current data and image cache. Concurrent completion
   by the same verified owner recovers unique-index conflicts by returning the
   saved assignment. A conflicting assignment for another owner is not accepted.
+  The assignment is read before requesting proof and checked again before
+  cleanup. Replacement of that assignment while IoT/cache operations are pending
+  fails with 409; deletion also checks the exact old ID and organization.
 - If IoT succeeds but MongoDB fails, polling retries completion with fresh IoT
   proof. Partial writes are accepted: old paper links may already be detached,
   and the old device may be removed before insertion fails. No database rollback
@@ -61,7 +65,7 @@ reported as an unconfirmed connection outcome, not a confirmed IoT timeout.
 Preflight status reads retry temporary network / HTTP 502, 503, 504 errors at
 most twice; HTML gateway responses are included. A lost start acknowledgement
 is recovered with a status poll (`enable:false`), never by automatically replaying
-the reset-capable start. Permanent errors such as 403 stop polling immediately.
+the start. Permanent errors such as 403 stop polling immediately.
 The normal error screen uses actionable EN/DE/NL messages; technical details
 remain available separately.
 
@@ -88,7 +92,9 @@ before releasing this behavior end to end.
 
 The acknowledged possibility of a normal button press confirming an unwanted
 claim remains an IoT/firmware limitation. Competing claims by multiple new
-organizations are outside this change's scope.
+organizations have regression coverage for delayed proof/cache responses and
+unique-index conflicts. End-to-end serialization of the IoT proof and local
+assignment would still require a claim generation or equivalent upstream protocol.
 
 ## Verification
 

@@ -186,7 +186,7 @@ export function useDeviceActivation(register: any, organization?: string) {
         if (attempt !== run.current || !isTemporaryActivationError(failure))
           throw failure;
         // A lost acknowledgement may still have started activation. Recover by
-        // reading its status; never automatically replay a reset-capable start.
+        // reading its status; never automatically restart the activation window.
         data = await send(
           registerRef.current,
           {

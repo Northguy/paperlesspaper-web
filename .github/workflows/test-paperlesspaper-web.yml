@@ -85,6 +85,14 @@ jobs:
       - name: Build workspace packages
         run: yarn --cwd packages/helpers build
 
+      - name: Run web unit and security regression tests
+        run: yarn --cwd packages/paperlesspaper-web vitest run --silent
+
+      - name: Run API unit and device ownership regression tests
+        run: yarn --cwd packages/paperlesspaper-api vitest run tests/unit tests/integration/deviceRegistration.persistence.test.ts --silent
+        env:
+          REGISTRATION_TEST_MONGODB_URL: mongodb://127.0.0.1:27017/paperless-registration-test-ci
+
       - name: Restore Playwright browser cache
         uses: actions/cache@v4
         with:

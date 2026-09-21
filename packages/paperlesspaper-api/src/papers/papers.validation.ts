@@ -43,8 +43,20 @@ export const generateSignedFileUrlSchema = {
   }),
   body: z
     .object({
-      kind: z.string().optional().openapi({ example: ".png" }),
-      return: z.string().optional(),
+      kind: z
+        .enum([
+          ".png",
+          "original.png",
+          "original.jpg",
+          "thumbnail.jpg",
+          "editable.json",
+        ])
+        .optional()
+        .openapi({ example: ".png" }),
+      return: z.literal("json").optional(),
+    })
+    .refine((body) => body.return !== "json" || body.kind === "editable.json", {
+      message: "JSON is only available for editable image data",
     })
     .openapi({
       example: {

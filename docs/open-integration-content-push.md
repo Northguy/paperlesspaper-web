@@ -35,6 +35,13 @@ with the current user's authentication and replies only to that iframe:
 {"source":"paperlesspaper-app","type":"CONNECTION_GRANT","payload":{"requestId":"unique-browser-request","grant":"opaque-five-minute-code"}}
 ```
 
+Invalid, opaque, credential-bearing, and mismatched settings origins are refused.
+Settings pages must use HTTPS; HTTP is allowed only on loopback for local development.
+Initialization and redirect tokens never use a wildcard `postMessage` target.
+Restricted (`onlyself`) organization members cannot obtain or use push
+connections. Membership and role are checked again on each connection use and
+before queued uploads/callbacks, so a role downgrade also removes existing access.
+
 Errors use the same message with `payload.error`. A paper must be saved first.
 The integration forwards the grant to **its own backend**. That backend exchanges
 it with the operator-configured host API. An ID in an iframe is not authorization.
