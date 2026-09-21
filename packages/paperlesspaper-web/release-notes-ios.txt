@@ -1,0 +1,1 @@
+This update fixes startup crashes and blank screens on iOS 27. It also improves navigation, Bluetooth and Wi-Fi setup, device activation, calendar settings, and translations. Edited images can now be saved and shared, with improved image and icon color selection.

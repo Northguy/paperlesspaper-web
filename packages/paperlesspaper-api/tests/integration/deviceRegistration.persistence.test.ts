@@ -122,6 +122,45 @@ describe.skipIf(!url)("device registration MongoDB persistence", () => {
     expect((await Device.findOne({ deviceId }))?.organization).toEqual(orgA);
   });
 
+  it("rejects a missing IoT status without changing an existing assignment", async () => {
+    iot.activateDevice.mockResolvedValue({ success: true });
+    await expect(getRegistrationStatus(deviceId, String(orgB))).rejects.toMatchObject({ statusCode: 502 });
+    await expect(registerDevice(deviceId, { ...body, enable: true })).rejects.toMatchObject({ statusCode: 502 });
+    expect(iot.activateDevice.mock.calls.every(call => call[2] === false)).toBe(true);
+    expect((await Device.findOne({ deviceId }))?.organization).toEqual(orgA);
+    expect((await Paper.findById(paper._id))?.deviceId).toEqual(previous._id);
+    expect(cache.resetDeviceImageCache).not.toHaveBeenCalled();
+  });
+
+  it.each([403, 404, 502])("normalizes IoT client errors (%s) without confusing them with caller permissions or changing ownership", async (statusCode) => {
+    iot.activateDevice.mockRejectedValue(Object.assign(new Error("Private upstream details"), { statusCode }));
+    const expected = { statusCode: 502, message: "Could not verify device activation" };
+    await expect(getRegistrationStatus(deviceId, String(orgB))).rejects.toMatchObject(expected);
+    await expect(registerDevice(deviceId, { ...body, enable: true })).rejects.toMatchObject(expected);
+    expect(iot.activateDevice.mock.calls.every(call => call[2] === false)).toBe(true);
+    expect((await Device.findOne({ deviceId }))?.organization).toEqual(orgA);
+    expect((await Paper.findById(paper._id))?.deviceId).toEqual(previous._id);
+    expect(cache.resetDeviceImageCache).not.toHaveBeenCalled();
+  });
+
+  it("surfaces a lost start acknowledgement as retryable without repeating the start or detaching the active owner", async () => {
+    iot.activateDevice.mockResolvedValueOnce({ activation_status: "success" })
+      .mockRejectedValueOnce(new Error("Connection reset after start"));
+    await expect(registerDevice(deviceId, { ...body, enable: true })).rejects.toMatchObject({ statusCode: 502 });
+    expect(iot.activateDevice.mock.calls.map(call => call[2])).toEqual([false, true]);
+    expect((await Device.findOne({ deviceId }))?.organization).toEqual(orgA);
+    expect((await Paper.findById(paper._id))?.deviceId).toEqual(previous._id);
+    expect(cache.resetDeviceImageCache).not.toHaveBeenCalled();
+  });
+
+  it("rejects a malformed activation acknowledgement instead of returning an undefined state", async () => {
+    iot.activateDevice.mockResolvedValueOnce({ activation_status: "success" })
+      .mockResolvedValueOnce({ success: true });
+    await expect(registerDevice(deviceId, { ...body, enable: true })).rejects.toMatchObject({ statusCode: 502 });
+    expect((await Device.findOne({ deviceId }))?.organization).toEqual(orgA);
+    expect((await Paper.findById(paper._id))?.deviceId).toEqual(previous._id);
+  });
+
   it.each(["pending", "timeout", "success", "reset"])(
     "preserves ownership and papers for unconfirmed %s",
     async (activation_status) => {
@@ -232,10 +271,10 @@ describe.skipIf(!url)("device registration MongoDB persistence", () => {
     );
   });
 
-  it("resets an active orphan only when starting, then activates it", async () => {
+  it("resets an active orphan without ownership proof only when starting, then activates it", async () => {
     await Device.deleteMany({});
     iot.activateDevice
-      .mockResolvedValueOnce(confirmed)
+      .mockResolvedValueOnce({ success: true, activation_status: "success" })
       .mockResolvedValueOnce({ activation_status: "reset" })
       .mockResolvedValueOnce({ activation_status: "pending" });
     await registerDevice(deviceId, { ...body, enable: true });
@@ -257,6 +296,36 @@ describe.skipIf(!url)("device registration MongoDB persistence", () => {
       String(orgB),
       false
     );
+  });
+
+  it("completes concurrent polls for the same verified owner with one assignment", async () => {
+    await Device.deleteMany({});
+    iot.activateDevice.mockResolvedValue(confirmed);
+    // Both requests reach the save phase before either may insert.
+    let release: () => void;
+    const barrier = new Promise<void>(resolve => { release = resolve; });
+    let arrivals = 0;
+    cache.resetDeviceImageCache.mockImplementation(async () => {
+      if (++arrivals === 2) release();
+      await barrier;
+    });
+    const [first, second] = await Promise.all([
+      registerDevice(deviceId, body), registerDevice(deviceId, body),
+    ]);
+    expect(first.registrationCompleted).toBe(true);
+    expect(second.registrationCompleted).toBe(true);
+    expect(String(first.createdDevice._id)).toBe(String(second.createdDevice._id));
+    expect(await Device.countDocuments({ deviceId })).toBe(1);
+  });
+
+  it("does not accept a concurrently inserted assignment belonging to another organization", async () => {
+    await Device.deleteMany({});
+    iot.activateDevice.mockResolvedValue(confirmed);
+    cache.resetDeviceImageCache.mockImplementationOnce(async () => {
+      await Device.create({ deviceId, organization: orgA, kind: "epd7" });
+    });
+    await expect(registerDevice(deviceId, body)).rejects.toMatchObject({ code: 11000 });
+    expect((await Device.findOne({ deviceId }))?.organization).toEqual(orgA);
   });
 
   it("cleans a stale inactive assignment without deleting its papers or resetting IoT", async () => {
@@ -286,6 +355,7 @@ describe.skipIf(!url)("device registration MongoDB persistence", () => {
     expect(cache.resetDeviceImageCache).not.toHaveBeenCalled();
     expect(result.createdDevice.meta).toEqual({ secret: "old-content" });
     expect((await Paper.findById(paper._id))?.deviceId).toEqual(previous._id);
+    expect(iot.activateDevice.mock.calls.every((call) => call[2] === false)).toBe(true);
     expect(
       iot.activateDevice.mock.calls.every((call) => call[3] !== true)
     ).toBe(true);
@@ -319,7 +389,7 @@ describe.skipIf(!url)("device registration MongoDB persistence", () => {
     expect(visibleLogs).toEqual([]);
   });
 
-  it("allows Start again to reset an orphan after a failed first save", async () => {
+  it("finishes Start again after a failed first save without resetting confirmed ownership", async () => {
     await Device.deleteMany({});
     iot.activateDevice.mockResolvedValue(confirmed);
     vi.spyOn(Device.collection, "insertOne").mockRejectedValueOnce(
@@ -340,10 +410,9 @@ describe.skipIf(!url)("device registration MongoDB persistence", () => {
         : confirmed
     );
     const result = await registerDevice(deviceId, { ...body, enable: true });
-    expect(iot.activateDevice.mock.calls.some((call) => call[3] === true)).toBe(
-      true
-    );
-    expect(result.registrationCompleted).toBe(false);
-    expect(result.activation_status).toBe("pending");
+    expect(iot.activateDevice).toHaveBeenCalledExactlyOnceWith(deviceId, String(orgB), false);
+    expect(result.registrationCompleted).toBe(true);
+    expect(result.activation_status).toBe("success");
+    expect(await Device.countDocuments({ deviceId })).toBe(1);
   });
 });

@@ -19,7 +19,11 @@ import classnames from "classnames";
 import InlineLoadingLarge from "components/InlineLoadingLarge";
 // TODO: import emptyPixel from "./illustrations/1x1.png";
 import useQs, { getQueryStringValue } from "helpers/useQs";
-import { useDeviceActivation } from "helpers/devices/useDeviceActivation";
+import {
+  ACTIVATION_WINDOW_SECONDS,
+  useDeviceActivation,
+} from "helpers/devices/useDeviceActivation";
+import { activationErrorMessage } from "helpers/devices/activationErrors";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faExternalLink } from "@fortawesome/pro-solid-svg-icons";
 import { useIsDesktop } from "@internetderdinge/web";
@@ -298,6 +302,7 @@ export default function SettingsDevicesNew({
     devicesApi.useRegisterDeviceMutation();
   const activation = useDeviceActivation(registerDevice, currentOrganization);
   const { response, time } = activation;
+  const initialWaitSeconds = Math.max(0, 60 - (ACTIVATION_WINDOW_SECONDS - time));
   const [
     getDeviceRegistrationStatus,
     getDeviceRegistrationStatusResult,
@@ -701,7 +706,7 @@ export default function SettingsDevicesNew({
                     again.
                   </Trans>
                 ) : (
-                  <Trans>{displayedRegistrationError?.data?.message}</Trans>
+                  <>{t(activationErrorMessage(displayedRegistrationError))}</>
                 )}
               </small>
             </p>
@@ -716,9 +721,11 @@ export default function SettingsDevicesNew({
               context={registrationDiagnostics}
               helpLink={
                 <HelpLink
-                  href={`${
-                    import.meta.env.REACT_APP_SERVER_WEBSITE_URL
-                  }/posts/reset-device#zurucksetzen-des-gerates`}
+                  href={
+                    displayedDeviceAlreadyRegistered
+                      ? `${import.meta.env.REACT_APP_SERVER_WEBSITE_URL}/posts/reset-device#zurucksetzen-des-gerates`
+                      : undefined
+                  }
                 />
               }
             />
@@ -755,6 +762,9 @@ export default function SettingsDevicesNew({
           submitNewDigitalDevice={submitNewDigitalDevice}
           formValues={displayedFormValues}
           beforeWriteCredentials={beforeWriteWifiCredentials}
+          onUseExistingWifi={() =>
+            continueDeviceRegistration({ ...formValues, wifiStatus: "1" })
+          }
           debugPreview={hasDebugState}
         />
       ) : displayedStep === "onboarding-sleep-error" ? (
@@ -810,9 +820,11 @@ export default function SettingsDevicesNew({
           >
             <p>
               <span>
-                <Trans i18nKey="PLEASE_WAIT_SECONDS">
-                  Please wait <span>{{ time: time } as any}</span> seconds
-                </Trans>
+                {initialWaitSeconds > 0
+                  ? t("Please wait {{seconds}} seconds", {
+                      seconds: initialWaitSeconds,
+                    })
+                  : t("This is taking a little longer...")}
               </span>
               <small>
                 <Trans>

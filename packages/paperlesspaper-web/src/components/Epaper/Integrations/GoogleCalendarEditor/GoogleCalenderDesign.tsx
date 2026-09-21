@@ -495,7 +495,11 @@ export default function GoogleCalendarDesign({
 
           form.setValue(
             "meta.calendarState",
-            { loading: false, error: null, isExistingPaper },
+            {
+              loading: false,
+              error: calendarAuth?.error || null,
+              isExistingPaper,
+            },
             updateOptions,
           );
         })

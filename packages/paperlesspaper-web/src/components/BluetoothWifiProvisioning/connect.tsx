@@ -4,7 +4,8 @@ import {
   dataViewToText,
 } from "@capacitor-community/bluetooth-le";
 import { Capacitor } from "@capacitor/core";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { App } from "@capacitor/app";
+import { useCallback, useEffect, useEffectEvent, useRef, useState } from "react";
 import i18next from "i18next";
 import * as Sentry from "@sentry/react";
 
@@ -48,13 +49,17 @@ export const useBluetoothWifiProvisioning = ({
   );
 
   const isNative = Capacitor.isNativePlatform();
+  const canRequestEnable = isNative && Capacitor.getPlatform() === "android";
+  const isIos = isNative && Capacitor.getPlatform() === "ios";
   const deviceRef = useRef<any>(null);
+  const enabledNotificationsRef = useRef(false);
   const scanTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scanRejectRef = useRef<((error: Error) => void) | null>(null);
   const runIdRef = useRef(0);
   const cancelledRef = useRef(false);
   const writingRef = useRef(false);
   const [isWriting, setIsWriting] = useState(false);
+  const [isRequestingEnable, setIsRequestingEnable] = useState(false);
 
   const clearScanTimeout = useCallback(() => {
     if (scanTimeoutRef.current) {
@@ -87,14 +92,25 @@ export const useBluetoothWifiProvisioning = ({
 
       clearScanTimeout();
 
-      await stopNativeScan();
-
       const currentDevice = deviceRef.current;
       deviceRef.current = null;
 
       if (resetDeviceState) {
         setDevice(null);
+        setIsRequestingEnable(false);
       }
+
+      // Queue listener removal before another attempt can register its listener.
+      if (enabledNotificationsRef.current) {
+        enabledNotificationsRef.current = false;
+        try {
+          await BleClient.stopEnabledNotifications();
+        } catch (error) {
+          console.debug("Could not stop Bluetooth state notifications", error);
+        }
+      }
+
+      await stopNativeScan();
 
       if (!currentDevice?.deviceId) return;
 
@@ -113,20 +129,70 @@ export const useBluetoothWifiProvisioning = ({
     };
   }, [cleanupBluetooth]);
 
-  const initializeBle = async () => {
-    await cleanupBluetooth({ resetDeviceState: false });
-
-    const runId = runIdRef.current + 1;
-    runIdRef.current = runId;
+  const initializeBle = async ({ requestEnable = false } = {}) => {
+    const cleanup = cleanupBluetooth();
+    const runId = runIdRef.current;
+    await cleanup;
+    if (runId !== runIdRef.current) return;
     cancelledRef.current = false;
 
     setConnectionState("initizalize-ble");
     setInitializedBle(true);
     setConnectionError({});
+    setIsRequestingEnable(false);
 
     try {
       console.log("initializeBle");
       await BleClient.initialize();
+      if (!isRunActive(runId)) return;
+
+      // Web Bluetooth owns adapter availability and its user-gesture device picker.
+      // Only native clients support meaningful adapter-state checks.
+      if (isNative) {
+        let enabled = await BleClient.isEnabled();
+        if (!isRunActive(runId)) return;
+
+        if (!enabled && requestEnable && canRequestEnable) {
+          setConnectionState("ble-enabled-error");
+          setIsRequestingEnable(true);
+          try {
+            await BleClient.requestEnable();
+          } catch (error) {
+            // Dismissing Android's dialog leaves the user on the retry screen.
+            if (!isRunActive(runId)) return;
+            setConnectionError({ error, position: "requestEnable" });
+          } finally {
+            if (isRunActive(runId)) setIsRequestingEnable(false);
+          }
+          if (!isRunActive(runId)) return;
+          enabled = await BleClient.isEnabled();
+          if (!isRunActive(runId)) return;
+        }
+
+        if (!enabled) {
+          setConnectionState("ble-enabled-error");
+          return;
+        }
+
+        enabledNotificationsRef.current = true;
+        await BleClient.startEnabledNotifications((enabled) => {
+          if (enabled || !isRunActive(runId)) return;
+          setConnectionState("ble-enabled-error");
+          // Invalidates this attempt synchronously, including reconnect callbacks.
+          void cleanupBluetooth();
+        });
+        if (!isRunActive(runId)) return;
+
+        // Close the gap between the initial check and subscribing to changes.
+        if (!(await BleClient.isEnabled())) {
+          if (!isRunActive(runId)) return;
+          setConnectionState("ble-enabled-error");
+          await cleanupBluetooth();
+          return;
+        }
+        if (!isRunActive(runId)) return;
+        setConnectionState("initizalize-ble");
+      }
 
       await BleClient.setDisplayStrings({
         scanning: `${i18next.t("Select the device")} epd-...`,
@@ -134,9 +200,11 @@ export const useBluetoothWifiProvisioning = ({
         availableDevices: i18next.t("Available devices"),
         noDeviceFound: i18next.t("No device found"),
       });
+      if (!isRunActive(runId)) return;
 
-      if (Capacitor.getPlatform() === "android") {
+      if (canRequestEnable) {
         const locationEnabled = await BleClient.isLocationEnabled();
+        if (!isRunActive(runId)) return;
         if (!locationEnabled) {
           setConnectionState("location-error");
           return;
@@ -251,26 +319,32 @@ export const useBluetoothWifiProvisioning = ({
             //onDisconnect(deviceId);
           },
           { timeout: 20000 }
-        ).catch((error) => {
+        ).catch(async (error) => {
           if (!isRunActive(runId)) return;
 
           console.log("error reconnectBluetooth", error);
           Sentry.captureException("error reconnectBluetooth", {
             extra: { data: error },
           });
+          const cleanupRun = runIdRef.current + 1;
+          await cleanupBluetooth();
+          if (cleanupRun !== runIdRef.current) return;
+          setConnectionError({
+            error,
+            message: error.message,
+            stack: error.stack,
+            position: "reconnectBluetooth",
+          });
+          setConnectionState("ble-error");
         });
       }
 
       if (!isRunActive(runId)) return;
 
-      const enabled = await BleClient.isEnabled();
-      if (!enabled) {
-        setConnectionState("ble-enabled-error");
-      }
-
       console.log("readWifiNetworks");
       await readWifiNetworks(deviceElement, runId);
     } catch (error) {
+      if (!isRunActive(runId)) return;
       clearScanTimeout();
       await stopNativeScan();
 
@@ -286,6 +360,44 @@ export const useBluetoothWifiProvisioning = ({
       setConnectionState("ble-error");
     }
   };
+
+  const retryAfterEnable = useEffectEvent(() => initializeBle());
+
+  useEffect(() => {
+    if (!isIos || connectionState !== "ble-enabled-error") return;
+
+    let disposed = false;
+    let checking = false;
+    const runId = runIdRef.current;
+
+    // iOS cannot enable the adapter from the app. Retry when the user returns
+    // from Settings (or dismisses the system Bluetooth power alert).
+    const listener = App.addListener("appStateChange", async ({ isActive }) => {
+      if (!isActive || disposed || checking || runId !== runIdRef.current) return;
+      checking = true;
+      try {
+        const enabled = await BleClient.isEnabled();
+        if (enabled && !disposed && runId === runIdRef.current) {
+          await retryAfterEnable();
+        }
+      } catch (error) {
+        // Keep the manual retry available if the foreground check fails.
+        console.debug("Could not recheck Bluetooth after returning to the app", error);
+      } finally {
+        checking = false;
+      }
+    });
+    void listener.catch((error) => {
+      console.debug("Could not watch the app's foreground state", error);
+    });
+
+    return () => {
+      disposed = true;
+      void listener.then((handle) => handle.remove()).catch((error) => {
+        console.debug("Could not remove the app state listener", error);
+      });
+    };
+  }, [connectionState, isIos]);
 
   const splitWifiNetworks = (networks) => {
     const networksArray = networks.split("Â´Â´").map((n) => {
@@ -362,6 +474,7 @@ export const useBluetoothWifiProvisioning = ({
         DEVICE_DATA_SERVICE,
         WIFI_SCAN_CHARACTERISTIC
       );
+      if (runId && !isRunActive(runId)) return;
 
       console.log(
         "wifi scan results level",
@@ -384,7 +497,7 @@ export const useBluetoothWifiProvisioning = ({
         stack: error.stack,
         position: "wifi-networks-loading",
       });
-      // setConnectionState("ble-error");
+      setConnectionState("ble-error");
     }
   };
 
@@ -464,6 +577,10 @@ export const useBluetoothWifiProvisioning = ({
     connectionState,
     connectionError,
     initializeBle,
+    requestEnable: () => initializeBle({ requestEnable: true }),
+    canRequestEnable,
+    isIos,
+    isRequestingEnable,
     initializedBle,
     setConnectionState,
     openAppSettings,

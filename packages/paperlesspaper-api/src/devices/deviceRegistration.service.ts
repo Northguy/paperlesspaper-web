@@ -33,8 +33,23 @@ const publicStatus = (status: any) => ({
   registrationCompleted: false,
 });
 
+async function activateDevice(
+  ...args: Parameters<typeof iotDevicesService.activateDevice>
+) {
+  try {
+    return await iotDevicesService.activateDevice(...args);
+  } catch {
+    // The shared IoT client labels transport failures as 404. This is an
+    // upstream verification failure, not proof that the frame is unknown.
+    throw new ApiError(
+      httpStatus.BAD_GATEWAY,
+      "Could not verify device activation"
+    );
+  }
+}
+
 async function readStatus(deviceId: string, organization: string) {
-  const status = await iotDevicesService.activateDevice(
+  const status = await activateDevice(
     deviceId,
     organization,
     false
@@ -85,7 +100,17 @@ async function completeRegistration(deviceId: string, body: RegistrationInput) {
   if (previous) {
     await detachAssignment(previous);
   }
-  await replacement.save();
+  try {
+    await replacement.save();
+  } catch (error) {
+    // Concurrent completion for the same verified owner can hit the serial's
+    // unique index. Return that assignment; never accept a different owner.
+    if (error?.code === 11000) {
+      const concurrent = await Device.findOne({ deviceId });
+      if (belongsTo(concurrent, body.organization)) return concurrent;
+    }
+    throw error;
+  }
   return replacement;
 }
 
@@ -127,12 +152,14 @@ export async function registerDevice(
   }
 
   let status = await readStatus(deviceId, body.organization);
-  if (body.enable) {
+  // Fresh organization-specific proof is enough to finish (or retry) storage.
+  // In particular, a lost response / failed save must not reset an owned orphan.
+  if (body.enable && !isConfirmed(status)) {
     const existing = await Device.findOne({ deviceId });
     if (!existing && status.activation_status === "success") {
       // Repair a confirmed orphan only when explicitly starting a new attempt,
       // never while polling or merely inspecting availability.
-      const reset = await iotDevicesService.activateDevice(
+      const reset = await activateDevice(
         deviceId,
         body.organization,
         false,
@@ -153,14 +180,14 @@ export async function registerDevice(
       // Pending, a missing key, or an upstream failure must never enter this path.
       await detachAssignment(existing);
     }
-    status = await iotDevicesService.activateDevice(
+    status = await activateDevice(
       deviceId,
       body.organization,
       true
     );
   }
 
-  if (!status || status.success === false) {
+  if (!status || status.success === false || !status.activation_status) {
     throw new ApiError(
       httpStatus.BAD_GATEWAY,
       "Could not verify device activation"
