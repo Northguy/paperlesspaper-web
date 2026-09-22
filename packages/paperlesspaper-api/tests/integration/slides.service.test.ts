@@ -19,6 +19,7 @@ const renderImageMock = vi.hoisted(() => vi.fn());
 const ditherImageMock = vi.hoisted(() => vi.fn());
 const prepareStoredImageMock = vi.hoisted(() => vi.fn());
 const s3SendMock = vi.hoisted(() => vi.fn());
+const paperUpdateOneMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@aws-sdk/client-s3", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@aws-sdk/client-s3")>();
@@ -127,6 +128,7 @@ vi.mock("../../src/papers/papers.model", () => ({
       }),
     })),
     findById: vi.fn(async (id: string) => fakePapers.get(id) || null),
+    updateOne: paperUpdateOneMock,
     find: vi.fn((filter: Record<string, any>) => {
       const selectedIds = new Set(
         filter?._id?.$in?.map((id: string) => id.toString()) || [],
@@ -158,6 +160,7 @@ vi.mock("../../src/papers/papers.model.js", () => ({
       }),
     })),
     findById: vi.fn(async (id: string) => fakePapers.get(id) || null),
+    updateOne: paperUpdateOneMock,
     find: vi.fn((filter: Record<string, any>) => {
       const selectedIds = new Set(
         filter?._id?.$in?.map((id: string) => id.toString()) || [],
@@ -179,6 +182,13 @@ describe("slides service", () => {
   beforeEach(() => {
     fakePapers.clear();
     vi.clearAllMocks();
+    paperUpdateOneMock.mockImplementation(async (filter, update) => {
+      const paper = fakePapers.get(filter._id);
+      if (paper) {
+        paper.meta = { ...paper.meta, slideshowRetryPaperId: update.$set["meta.slideshowRetryPaperId"] };
+      }
+      return { matchedCount: paper ? 1 : 0 };
+    });
 
     devicesGetByIdMock.mockResolvedValue({
       _id: "device-object-id",
@@ -342,6 +352,74 @@ describe("slides service", () => {
       .rejects.toThrow("database unavailable");
     expect(uploadSingleImageMock).toHaveBeenCalledOnce();
     expect(renderImageMock).toHaveBeenCalledOnce();
+  });
+
+  it("limits a long failing slideshow to three attempts and resumes at the next entry", async () => {
+    vi.useFakeTimers();
+    const ids = Array.from({ length: 41 }, (_, i) => `slide-${i}`);
+    const slideshow = createPaper({
+      _id: "slideshow-1", kind: "slides", organization: "org-1",
+      meta: { currentSlide: 0, lastSelectedPaperId: "slide-40",
+        selectedPapers: Object.fromEntries(ids.map(id => [id, true])) },
+    });
+    for (const id of ids) createPaper({
+      _id: id, kind: "calendar", organization: "org-1", meta: {},
+    });
+    renderImageMock.mockImplementation(async () => {
+      await new Promise(resolve => setTimeout(resolve, 15_000));
+      return { buffer: null, size: { width: 800, height: 480 } };
+    });
+    const service = (await import("../../src/papers/papers.service")).default;
+    const device = { deviceId: "DEVICE-1", kind: "epd7" };
+    const assertion = expect(service.updateNextSlide(slideshow, device))
+      .rejects.toThrow("Could not render paper image");
+    await vi.advanceTimersByTimeAsync(45_000);
+    await assertion;
+    expect(renderImageMock.mock.calls.map(([args]) => args.paper._id)).toEqual(ids.slice(0, 3));
+    expect(paperUpdateOneMock).toHaveBeenCalledExactlyOnceWith(
+      { _id: "slideshow-1" }, { $set: { "meta.slideshowRetryPaperId": "slide-3" } },
+    );
+    expect(slideshow.save).not.toHaveBeenCalled();
+    expect(uploadSingleImageMock).not.toHaveBeenCalled();
+    expect(slideshow.meta?.currentSlide).toBe(0);
+    expect(slideshow.meta?.lastSelectedPaperId).toBe("slide-40");
+
+    renderImageMock.mockResolvedValue({ buffer: Buffer.from("recovered"), size: { width: 800, height: 480 } });
+    await service.updateNextSlide(slideshow, device);
+    expect(uploadSingleImageMock.mock.calls[0][0].triggerMetadata.sourcePaperId).toBe("slide-3");
+    expect(slideshow.meta?.currentSlide).toBe(4);
+    expect(slideshow.meta?.slideshowRetryPaperId).toBeUndefined();
+  });
+
+  it("wraps the retry cursor when a second budget is exhausted", async () => {
+    const ids = ["slide-0", "slide-1", "slide-2", "slide-3", "slide-4"];
+    const slideshow = createPaper({
+      _id: "slideshow-1", kind: "slides", organization: "org-1",
+      meta: { currentSlide: 0, selectedPapers: Object.fromEntries(ids.map(id => [id, true])) },
+    });
+    for (const id of ids) createPaper({ _id: id, kind: "calendar", organization: "org-1", meta: {} });
+    renderImageMock.mockResolvedValue({ buffer: null, size: { width: 800, height: 480 } });
+    const service = (await import("../../src/papers/papers.service")).default;
+    for (let i = 0; i < 2; i++) {
+      await expect(service.updateNextSlide(slideshow, { deviceId: "DEVICE-1", kind: "epd7" })).rejects.toThrow();
+    }
+    expect(renderImageMock.mock.calls.map(([args]) => args.paper._id))
+      .toEqual(["slide-0", "slide-1", "slide-2", "slide-3", "slide-4", "slide-0"]);
+    expect(slideshow.meta?.slideshowRetryPaperId).toBe("slide-1");
+    expect(slideshow.save).not.toHaveBeenCalled();
+  });
+
+  it("ignores a retry cursor whose entry is no longer selected", async () => {
+    const slideshow = createPaper({
+      _id: "slideshow-1", kind: "slides", organization: "org-1",
+      meta: { currentSlide: 1, lastSelectedPaperId: "slide-1", slideshowRetryPaperId: "removed",
+        selectedPapers: { "slide-1": true, "slide-2": true } },
+    });
+    for (const id of ["slide-1", "slide-2"]) createPaper({ _id: id, kind: "calendar", organization: "org-1", meta: {} });
+    const service = (await import("../../src/papers/papers.service")).default;
+    await service.updateNextSlide(slideshow, { deviceId: "DEVICE-1", kind: "epd7" });
+    expect(uploadSingleImageMock.mock.calls[0][0].triggerMetadata.sourcePaperId).toBe("slide-2");
+    expect(slideshow.meta?.slideshowRetryPaperId).toBeUndefined();
   });
 
   it("destroys a stalled S3 response stream and preserves the slide for retry", async () => {
