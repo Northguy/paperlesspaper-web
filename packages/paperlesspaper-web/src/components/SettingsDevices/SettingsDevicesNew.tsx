@@ -829,12 +829,6 @@ export default function SettingsDevicesNew({
                     })
                   : t("This is taking a little longer...")}
               </span>
-              <small>
-                <Trans>
-                  Press the button on the device once, or wait for the Wi-Fi
-                  setup to confirm activation.
-                </Trans>
-              </small>
             </p>
           </InfoWrapper>
         </>

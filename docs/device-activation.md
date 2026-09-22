@@ -76,6 +76,17 @@ the shared client's generic 404 must not imply an unknown device or prevent
 safe status-read retries. Target-organization membership and role failures
 still return 403 before the IoT call.
 
+Temporary compatibility (2026-09-22): the deployed IoT status-only endpoint can
+omit `activation_status` for a frame whose database record has no activation
+state. The API maps only the observed successful e-paper response (matching
+organization, exact status-only message, absent status and key) to `unclaimed`.
+This allows preflight and an explicit activation start; it is never ownership
+proof and does not change assignments, papers or images. Start acknowledgements
+and all other malformed/error responses remain subject to the existing checks.
+Remove this fallback once IoT reliably returns its documented `unclaimed` state
+for these devices. No mobile app or firmware update is needed for this workaround;
+the Paperlesspaper API must be deployed.
+
 Failed BLE reconnection and Wi-Fi-list reads transition to the retry screen.
 A failed reconnect cancels its session so late reads cannot hide that error.
 These paths have simulated native-platform regression coverage; real iOS and
