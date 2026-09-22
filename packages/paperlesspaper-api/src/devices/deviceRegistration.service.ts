@@ -50,6 +50,22 @@ async function activateDevice(
 
 async function readStatus(deviceId: string, organization: string) {
   const status = await activateDevice(deviceId, organization, false);
+  // Temporary compatibility with epaper-manager's status-only response for
+  // devices without activation_status in DynamoDB (2026-09-22). Remove once
+  // IoT consistently returns the documented "unclaimed" state. Match only the
+  // observed response; never infer ownership or normalize start acknowledgements.
+  if (
+    deviceId.startsWith("epd") &&
+    status?.success === true &&
+    status.activation_status === undefined &&
+    status.key === undefined &&
+    status.type === "epaper" &&
+    status.organizationName === organization &&
+    status.message ===
+      'Device activation flag is false. Only Data is returned. To start activation set "enable":true'
+  ) {
+    return { ...status, activation_status: "unclaimed" };
+  }
   if (!status || status.success === false || !status.activation_status) {
     throw new ApiError(
       httpStatus.BAD_GATEWAY,
