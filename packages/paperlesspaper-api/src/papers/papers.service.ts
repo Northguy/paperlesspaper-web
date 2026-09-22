@@ -1215,8 +1215,8 @@ const updateNextSlide = async (
   paper: any,
   device: any,
   trigger = "slideshow",
-): Promise<void> => {
-  var result = {};
+): Promise<Record<string, any> | undefined> => {
+  const result: Record<string, any> = {};
   const organizationId =
     paper?.organization?.toString?.() || paper?.organization;
   if (!organizationId) {
@@ -1304,27 +1304,58 @@ const updateNextSlide = async (
     result.selectedSequential = nextSlideIndex;
   }
 
-  if (selectedSlide?.key) {
-    // console.log('Updating slide to', selectedSlide.key);
-    const selectedPaper = await getById(selectedSlide?.key);
+  if (!selectedSlide?.key) return result;
 
-    result.uploadSingleImageFromAny = await uploadSingleImageFromAny(
-      selectedPaper,
-      paper,
-      device,
-      trigger,
-    );
-    // Keep the current position if rendering or uploading fails, so retries
-    // prepare the same sequential slide instead of silently skipping it.
+  const startIndex = selectedPapersArrayOnlyExisting.indexOf(selectedSlide);
+  // Try each sequential entry at most once, wrapping at the end of the list.
+  // Random selection retains its existing single-attempt behavior.
+  const candidates = paper.meta.order === "random"
+    ? [selectedSlide]
+    : [
+        ...selectedPapersArrayOnlyExisting.slice(startIndex),
+        ...selectedPapersArrayOnlyExisting.slice(0, startIndex),
+      ];
+
+  let lastError: unknown;
+  for (const candidate of candidates) {
+    try {
+      const selectedPaper = await getById(candidate.key);
+      result.uploadSingleImageFromAny = await uploadSingleImageFromAny(
+        selectedPaper,
+        paper,
+        device,
+        trigger,
+      );
+    } catch (error) {
+      lastError = error;
+      (result.skippedPaperIds ??= []).push(candidate.key);
+      // Avoid logging URLs/settings or upstream errors containing credentials.
+      console.warn("Slideshow entry failed", {
+        slideshowId: paper._id?.toString(),
+        sourcePaperId: candidate.key,
+      });
+      continue;
+    }
+
+    if (paper.meta.order !== "random") {
+      nextSlideIndex =
+        (selectedPapersArrayOnlyExisting.indexOf(candidate) + 1) %
+        selectedPapersArrayOnlyExisting.length;
+      result.selectedSequential = nextSlideIndex;
+    }
+    // Persist only after a successful upload. A save failure must not trigger
+    // another upload; if all candidates fail, keep the previous position.
     result.updateById = await updateById(paper._id, {
       meta: {
         ...paper.meta,
         currentSlide: nextSlideIndex,
-        lastSelectedPaperId: selectedSlide.key,
+        lastSelectedPaperId: candidate.key,
       },
     });
+    return result;
   }
-  return result;
+  // Let the scheduler release its claim and retry at a later opportunity.
+  throw lastError;
 };
 
 export default {
