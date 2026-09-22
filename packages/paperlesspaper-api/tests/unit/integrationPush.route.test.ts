@@ -28,7 +28,7 @@ vi.mock("@internetderdinge/api", () => ({
   },
   catchAsync: (fn: any) => (req: any, res: any, next: any) =>
     Promise.resolve(fn(req, res, next)).catch(next),
-  User: { exists: m.member },
+  User: { findOne: m.member },
 }));
 vi.mock("../../src/papers/papers.model.js", () => ({
   default: { findById: m.paper },
@@ -136,6 +136,39 @@ it("refuses membership loss and unsaved settings-page changes", async () => {
     ).status
   ).toBe(409);
   expect(m.grantCreate).not.toHaveBeenCalled();
+});
+
+it("denies restricted members both new grants and existing integration connections", async () => {
+  m.member.mockResolvedValue({ role: "onlyself" });
+  expect(
+    (
+      await request(app).post(`/papers/${paperId}/grants`).send({
+        configUrl: paper.meta.pluginConfigUrl,
+        settingsPage: "https://telegram.example/settings.html",
+      })
+    ).status
+  ).toBe(403);
+  expect(
+    (
+      await request(app)
+        .post(`/connections/${connectionId}/content`)
+        .set("authorization", `Bearer ${token}`)
+        .send({ messageId: "restricted", text: "No access" })
+    ).status
+  ).toBe(403);
+  expect(
+    (
+      await request(app)
+        .get(`/connections/${connectionId}/status`)
+        .set("authorization", `Bearer ${token}`)
+    ).status
+  ).toBe(403);
+  expect(m.grantCreate).not.toHaveBeenCalled();
+  expect(m.accept).not.toHaveBeenCalled();
+  expect(m.member).toHaveBeenCalledWith({
+    owner: "owner",
+    organization: "org",
+  });
 });
 it("exchanges a one-time grant for paper-scoped tokens and a manifest-selected callback", async () => {
   m.grantConsume.mockResolvedValue({

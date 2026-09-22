@@ -38,10 +38,12 @@ export async function authorizedPaper(owner: string, paperId: string) {
   if (!owner || !/^[a-f\d]{24}$/i.test(paperId))
     throw new ApiError(403, "Paper access denied");
   const paper = await Paper.findById(paperId);
-  if (
-    !paper?.organization ||
-    !(await User.exists({ owner, organization: paper.organization }))
-  )
+  const member = paper?.organization
+    ? await User.findOne({ owner, organization: paper.organization })
+    : null;
+  // Match organization write restrictions, including on every use of an
+  // existing connection after a member's role has changed.
+  if (!member || member.role === "onlyself")
     throw new ApiError(403, "Paper access denied");
   try {
     return { paper, identity: integrationIdentity(paper) };

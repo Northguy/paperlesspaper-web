@@ -104,13 +104,13 @@ const Editor = ({ image }: any) => {
         paperId: params.paper,
         size,
       });
+      imageEditorTools.setImageLoadError(null);
     } catch (err) {
-      if (err instanceof Error && err.message === "EDITOR_LOAD_TIMEOUT") {
-        window.alert(t("Loading image data timed out after 30 seconds."));
-      } else {
-        window.alert(t("Loading failed"));
-      }
-      console.error("Failed to load image data for editor", err);
+      imageEditorTools.setImageLoadError(
+        err instanceof Error && err.message === "EDITOR_LOAD_TIMEOUT"
+          ? "Loading image data timed out after 30 seconds."
+          : "The saved image could not be loaded. Try again or close the editor and upload a new image.",
+      );
     } finally {
       imageEditorTools.setIsLoadingImageData(false);
       hasUserInteractedRef.current = false;
@@ -127,6 +127,8 @@ const Editor = ({ image }: any) => {
     if (params.paper !== "new") {
       console.log("Loading image data for editor...", params);
       loadeImageData();
+    } else {
+      imageEditorTools.setImageLoadError(null);
     }
   }, [isCanvasReady, params.entry, params.paper]);
 
@@ -544,6 +546,18 @@ const Editor = ({ image }: any) => {
 
   return (
     <>
+      {imageEditorTools.imageLoadError && (
+        <div role="alert">
+          <p>{t(imageEditorTools.imageLoadError)}</p>
+          <Button
+            type="button"
+            disabled={imageEditorTools.isLoadingImageData}
+            onClick={loadeImageData}
+          >
+            <Trans>Try again</Trans>
+          </Button>
+        </div>
+      )}
       {preview && (
         <Modal
           modalHeading={<Trans>Preview</Trans>}

@@ -86,7 +86,7 @@ export default function DownloadImage() {
         id="downloadImage"
         text={t("Download")}
         icon={<FontAwesomeIcon icon={faDownload} />}
-        disabled={imageEditorTools.isLoadingImageData}
+        disabled={imageEditorTools.isLoadingImageData || Boolean(imageEditorTools.imageLoadError)}
         onClick={() => {
           setFile(null);
           setError(false);

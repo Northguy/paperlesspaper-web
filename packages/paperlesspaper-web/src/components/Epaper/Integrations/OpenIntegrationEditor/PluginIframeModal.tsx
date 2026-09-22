@@ -122,6 +122,29 @@ const PluginIframeModal = () => {
     ? getOriginFromUrl(resolvedSettingsPage)
     : null;
 
+  // Keep pending grants alive across resize/RTK state renders. Changes to the
+  // authorized paper or endpoints still replace this callback and cancel replies.
+  const requestConnection = React.useCallback(async () => {
+    if (new URL(resolvedSettingsPage).origin !== new URL(configUrl).origin)
+      throw new Error("Integration origin mismatch");
+    return createPushGrant({
+      paperId,
+      configUrl,
+      settingsPage: resolvedSettingsPage,
+    }).unwrap();
+  }, [createPushGrant, paperId, configUrl, resolvedSettingsPage]);
+  const updateHeight = React.useCallback(
+    (h: number) => setHeight(Math.min(Math.max(h, 240), 1400)),
+    []
+  );
+  const updateSettings = React.useCallback(
+    (patch: Record<string, any>) => {
+      const current = form.getValues?.(SETTINGS_PATH) || {};
+      form.setValue?.(SETTINGS_PATH, { ...current, ...patch });
+    },
+    [form]
+  );
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
       {!manifest?.name ? (
@@ -138,26 +161,12 @@ const PluginIframeModal = () => {
               expectedOrigin={expectedOrigin}
               onConnectionRequest={
                 manifest.capabilities?.contentPush && paperId
-                  ? async () => {
-                      if (
-                        new URL(resolvedSettingsPage).origin !==
-                        new URL(configUrl).origin
-                      )
-                        throw new Error("Integration origin mismatch");
-                      return createPushGrant({
-                        paperId,
-                        configUrl,
-                        settingsPage: resolvedSettingsPage,
-                      }).unwrap();
-                    }
+                  ? requestConnection
                   : undefined
               }
               height={height}
-              onHeight={(h) => setHeight(Math.min(Math.max(h, 240), 1400))}
-              onSettingsUpdate={(patch) => {
-                const current = form.getValues?.(SETTINGS_PATH) || {};
-                form.setValue?.(SETTINGS_PATH, { ...current, ...patch });
-              }}
+              onHeight={updateHeight}
+              onSettingsUpdate={updateSettings}
               initMessage={initMessage}
               redirectMessage={redirectMessage || undefined}
             />

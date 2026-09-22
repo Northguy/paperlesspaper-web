@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
+import { createPortal } from "react-dom";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({
@@ -13,6 +14,8 @@ const state = vi.hoisted(() => ({
   initializeBle: vi.fn(),
   requestEnable: vi.fn(),
   openAppSettings: vi.fn(),
+  wifiNetworks: [{ ssid: "Test network", rssi: -40 }],
+  writeWifiCredentials: vi.fn(),
 }));
 vi.mock("../../src/components/BluetoothWifiProvisioning/connect", () => ({
   useBluetoothWifiProvisioning: () => state,
@@ -32,7 +35,7 @@ vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 vi.mock("components/SettingsDevices/SettingsDevicesNew", () => ({
-  InfoWrapper: ({ children }: any) => <div>{children}</div>,
+  InfoWrapper: ({ children, bottom }: any) => <div>{children}{bottom}</div>,
   DebugScreenSwitcher: () => null,
   HelpLink: () => null,
 }));
@@ -63,6 +66,7 @@ beforeEach(() => {
   root = createRoot(container);
   vi.clearAllMocks();
   state.connectionState = "ble-enabled-error";
+  state.initializedBle = true;
   state.connectionError = {};
   state.canRequestEnable = true;
   state.isIos = false;
@@ -70,16 +74,35 @@ beforeEach(() => {
 });
 afterEach(() => act(() => root.unmount()));
 
-function show() {
+function show(props = {}) {
   act(() =>
     root.render(
       <BluetoothWifiProvisioning
         setAllowSubmit={vi.fn()}
         formValues={{ deviceId: "epd7-test" }}
+        {...props}
       />
     )
   );
 }
+
+it("can confirm an existing Wi-Fi connection without opening Bluetooth or writing credentials", () => {
+  state.initializedBle = false;
+  const onUseExistingWifi = vi.fn();
+  show({ onUseExistingWifi });
+  expect(onUseExistingWifi).not.toHaveBeenCalled();
+  click("Device is already connected to Wi-Fi");
+  expect(onUseExistingWifi).toHaveBeenCalledTimes(1);
+  expect(state.initializeBle).not.toHaveBeenCalled();
+  expect(state.writeWifiCredentials).not.toHaveBeenCalled();
+});
+
+it("does not offer registration via existing Wi-Fi in the ordinary Wi-Fi change dialog", () => {
+  state.initializedBle = false;
+  show();
+  expect(button("Device is already connected to Wi-Fi")).toBeUndefined();
+  expect(button("Setup WiFi")).toBeTruthy();
+});
 
 it("offers Android's enable dialog and a manual retry without linking to app permissions", () => {
   show();
@@ -127,4 +150,31 @@ it.each([
   click("Open app settings");
   expect(state.openAppSettings).toHaveBeenCalledTimes(1);
   expect(container.textContent).not.toContain("Bluetooth is turned off");
+});
+
+it("does not submit the enclosing device settings when the Wi-Fi modal submits", async () => {
+  state.connectionState = "wifi-networks-password";
+  const saveDeviceSettings = vi.fn((event) => event.preventDefault());
+  const portal = document.createElement("div");
+  document.body.appendChild(portal);
+  try {
+    await act(async () => root.render(
+      <form onSubmit={saveDeviceSettings}>
+        {createPortal(
+          <BluetoothWifiProvisioning
+            setAllowSubmit={vi.fn()}
+            formValues={{ deviceId: "epd7-test" }}
+          />,
+          portal,
+        )}
+      </form>
+    ));
+    await act(async () => {
+      portal.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+    expect(state.writeWifiCredentials).toHaveBeenCalledTimes(1);
+    expect(saveDeviceSettings).not.toHaveBeenCalled();
+  } finally {
+    portal.remove();
+  }
 });

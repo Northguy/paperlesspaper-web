@@ -208,7 +208,7 @@ const ImageEditor = React.forwardRef<
   });
 
   const submitImage = React.useCallback(async () => {
-    if (imageEditorTools.isLoadingImageData) return;
+    if (imageEditorTools.isLoadingImageData || imageEditorTools.imageLoadError) return null;
     const fabricCanvas = fabricRef.current;
     if (fabricCanvas) {
       fabricCanvas.discardActiveObject();
@@ -352,6 +352,7 @@ const ImageEditor = React.forwardRef<
         beforeFrameSelection={submitImage}
         openPreviewImage={imageEditorTools.openPreviewImage}
         isLoadingImageData={imageEditorTools.isLoadingImageData}
+        primaryButtonDisabled={Boolean(imageEditorTools.imageLoadError)}
         setIsLoadingImageData={imageEditorTools.setIsLoadingImageData}
         onRequestCloseOverride={onRequestCloseOverride}
         onRequestSubmitOverride={

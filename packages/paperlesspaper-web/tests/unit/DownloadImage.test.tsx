@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
   share: vi.fn(),
   canShare: vi.fn(),
   canvas: { current: {} },
-  tools: { getCanvasSize: () => ({ width: 1200, height: 800 }) },
+  tools: { getCanvasSize: () => ({ width: 1200, height: 800 }), imageLoadError: null as string | null },
 }));
 vi.mock(
   "../../src/components/Epaper/Integrations/ImageEditor/ImageEditor",
@@ -22,8 +22,8 @@ vi.mock(
 vi.mock(
   "../../src/components/Epaper/Integrations/ImageEditor/EditorButton",
   () => ({
-    default: ({ text, onClick }: any) => (
-      <button onClick={onClick}>{text}</button>
+    default: ({ text, onClick, disabled }: any) => (
+      <button onClick={onClick} disabled={disabled}>{text}</button>
     ),
   }),
 );
@@ -71,6 +71,7 @@ const click = async (text: string, dialog = false) =>
   });
 beforeEach(async () => {
   vi.clearAllMocks();
+  mocks.tools.imageLoadError = null;
   (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
   mocks.canShare.mockReturnValue(false);
   mocks.export.mockImplementation(
@@ -85,6 +86,14 @@ beforeEach(async () => {
 afterEach(() => {
   act(() => root.unmount());
   container.remove();
+});
+it("prevents downloading a blank image after loading failed", async () => {
+  mocks.tools.imageLoadError = "Image could not be loaded";
+  await act(async () => root.render(<DownloadImage />));
+  expect(container.querySelector("button")?.disabled).toBe(true);
+  await click("Download");
+  expect(mocks.export).not.toHaveBeenCalled();
+  expect(container.querySelector('[role="dialog"]')).toBeNull();
 });
 it("requires confirmation and does not download when opening or cancelling", async () => {
   expect(mocks.export).not.toHaveBeenCalled();

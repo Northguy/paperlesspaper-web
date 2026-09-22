@@ -65,6 +65,7 @@ export const papersApi: any = generateCrudApi({
         url: `papers/image/${request.id}`,
         method: "post",
         body: request.body,
+        timeout: 30_000,
       }),
       transformResponse: (response) => response,
       providesTags: (result, error, { id }) => [{ type: "papers", id }],
@@ -79,6 +80,7 @@ export const papersApi: any = generateCrudApi({
           url: `papers/image/${request.id}`,
           method: "post",
           body: request.body,
+          timeout: 30_000,
         };
       },
       providesTags: (result, error, { id }) => [{ type: "papers", id }],

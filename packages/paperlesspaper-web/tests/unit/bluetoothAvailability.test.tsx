@@ -86,6 +86,50 @@ function render() {
   act(() => root.render(<Harness />));
 }
 
+it("offers retry when automatic reconnection fails", async () => {
+  await initialize();
+  const onDisconnect = ble.connect.mock.calls[0][1];
+  ble.connect.mockRejectedValueOnce(new Error("Connection timed out"));
+  await act(async () => { onDisconnect(device.deviceId); });
+  expect(hook.connectionState).toBe("ble-error");
+  expect(hook.connectionError.position).toBe("reconnectBluetooth");
+});
+
+it("offers retry when the Wi-Fi list read fails after the probe succeeds", async () => {
+  ble.read.mockResolvedValueOnce("ready").mockRejectedValueOnce(new Error("GATT disconnected"));
+  await initialize();
+  expect(hook.connectionState).toBe("ble-error");
+  expect(hook.connectionError.position).toBe("wifi-networks-loading");
+});
+
+it("does not let a stale Wi-Fi read hide a failed reconnection", async () => {
+  let finishRead: (value: string) => void;
+  ble.read.mockResolvedValueOnce("ready").mockImplementationOnce(() => new Promise(resolve => { finishRead = resolve; }));
+  render();
+  let initializing: Promise<void>;
+  await act(async () => { initializing = hook.initializeBle(); });
+  const onDisconnect = ble.connect.mock.calls[0][1];
+  ble.connect.mockRejectedValueOnce(new Error("Connection timed out"));
+  await act(async () => { onDisconnect(device.deviceId); });
+  expect(hook.connectionState).toBe("ble-error");
+  await act(async () => { finishRead!("HomeÂ´-42"); await initializing!; });
+  expect(hook.connectionState).toBe("ble-error");
+  expect(hook.connectionError.position).toBe("reconnectBluetooth");
+});
+
+it("ignores a late reconnection failure after the dialog was closed", async () => {
+  await initialize();
+  const onDisconnect = ble.connect.mock.calls[0][1];
+  let rejectReconnect: (error: Error) => void;
+  ble.connect.mockImplementationOnce(() => new Promise((_resolve, reject) => { rejectReconnect = reject; }));
+  await act(async () => { onDisconnect(device.deviceId); });
+  await act(async () => { await hook.cleanupBluetooth(); });
+  const stateAfterClose = hook.connectionState;
+  await act(async () => { rejectReconnect!(new Error("Connection timed out")); });
+  expect(hook.connectionState).toBe(stateAfterClose);
+  expect(hook.connectionError.position).not.toBe("reconnectBluetooth");
+});
+
 async function initialize() {
   render();
   await act(async () => {

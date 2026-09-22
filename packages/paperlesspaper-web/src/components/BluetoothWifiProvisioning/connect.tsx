@@ -319,13 +319,23 @@ export const useBluetoothWifiProvisioning = ({
             //onDisconnect(deviceId);
           },
           { timeout: 20000 }
-        ).catch((error) => {
+        ).catch(async (error) => {
           if (!isRunActive(runId)) return;
 
           console.log("error reconnectBluetooth", error);
           Sentry.captureException("error reconnectBluetooth", {
             extra: { data: error },
           });
+          const cleanupRun = runIdRef.current + 1;
+          await cleanupBluetooth();
+          if (cleanupRun !== runIdRef.current) return;
+          setConnectionError({
+            error,
+            message: error.message,
+            stack: error.stack,
+            position: "reconnectBluetooth",
+          });
+          setConnectionState("ble-error");
         });
       }
 
@@ -487,7 +497,7 @@ export const useBluetoothWifiProvisioning = ({
         stack: error.stack,
         position: "wifi-networks-loading",
       });
-      // setConnectionState("ble-error");
+      setConnectionState("ble-error");
     }
   };
 

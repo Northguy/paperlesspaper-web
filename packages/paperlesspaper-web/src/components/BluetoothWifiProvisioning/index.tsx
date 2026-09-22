@@ -136,6 +136,7 @@ export default function BluetoothWifiProvisioning({
   startTimer,
   debugPreview,
   beforeWriteCredentials,
+  onUseExistingWifi,
 }: any) {
   const {
     connectionState,
@@ -312,14 +313,26 @@ export default function BluetoothWifiProvisioning({
       {!displayedInitializedBle ? (
         <InfoWrapper
           bottom={
-            <Button
-              onClick={initializeBle}
-              large
-              className={styles.pressedButton}
-              icon={<FontAwesomeIcon icon={faChevronRight} />}
-            >
-              <Trans>Setup WiFi</Trans>
-            </Button>
+            <>
+              <Button
+                onClick={initializeBle}
+                large
+                className={styles.pressedButton}
+                icon={<FontAwesomeIcon icon={faChevronRight} />}
+              >
+                <Trans>Setup WiFi</Trans>
+              </Button>
+              {onUseExistingWifi && (
+                <Button
+                  type="button"
+                  kind="tertiary"
+                  onClick={onUseExistingWifi}
+                  disabled={isDebugPreview}
+                >
+                  <Trans>Device is already connected to Wi-Fi</Trans>
+                </Button>
+              )}
+            </>
           }
           image={
             <EpaperFrame
@@ -409,7 +422,15 @@ export default function BluetoothWifiProvisioning({
       ) : displayedConnectionState === "wifi-networks-display" ||
         (displayedConnectionState === "wifi-networks-password" &&
           displayedWifiNetworks) ? (
-        <form onSubmit={handleSubmit(onSubmit)} ref={formRef}>
+        <form
+          onSubmit={(event) => {
+            // React submit events also bubble through modal portals. Stop at
+            // this form before async validation can reach the settings/claim form.
+            event.stopPropagation();
+            void handleSubmit(onSubmit)(event);
+          }}
+          ref={formRef}
+        >
           {displayedConnectionState === "wifi-networks-display" ? (
             <InfoWrapper
               bottom={

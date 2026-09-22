@@ -145,6 +145,7 @@ export default function imageEditorTools({
   const [activeObject, setActiveObject] = useState(null);
 
   const [isLoadingImageData, setIsLoadingImageData] = useState(false);
+  const [imageLoadError, setImageLoadError] = useState<string | null>(null);
   const previewImageObjectUrlRef = useRef<string | null>(null);
 
   const revokePreviewImageObjectUrl = () => {
@@ -872,7 +873,7 @@ export default function imageEditorTools({
   }
 
   const openPreviewImage = async (previewState = true) => {
-    if (isLoadingImageData) return;
+    if (isLoadingImageData || imageLoadError) return;
     const generatedDebugInfo = (await generatePreview()) as
       | PreviewDitheringDebugInfo
       | undefined;
@@ -946,6 +947,8 @@ export default function imageEditorTools({
     hex,
     rotateScreen,
     isLoadingImageData,
+    imageLoadError,
+    setImageLoadError,
     getCanvasSize,
     setIsLoadingImageData,
     setActiveObject,

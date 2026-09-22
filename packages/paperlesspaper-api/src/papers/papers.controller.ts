@@ -1,4 +1,5 @@
 import httpStatus from "http-status";
+import { fetchEditableImage } from "./fetchEditableImage";
 import type { Request, Response } from "express";
 import {
   ApiError,
@@ -580,9 +581,7 @@ export const generateSignedFileUrl = catchAsync(
     );
 
     if (req.body.return === "json") {
-      const jsonResult = await fetch(signedUrl);
-      const jsonResultText = await jsonResult.json();
-      res.send(jsonResultText);
+      res.send(await fetchEditableImage(signedUrl));
     } else {
       res.send({ signedUrl });
     }

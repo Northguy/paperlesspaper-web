@@ -1,4 +1,6 @@
 {
+  "Invalid integration URL": "Ongeldige integratie-URL",
+  "The saved image could not be loaded. Try again or close the editor and upload a new image.": "De opgeslagen afbeelding kon niet worden geladen. Probeer het opnieuw of sluit de editor en upload een nieuwe afbeelding.",
   "Download": "Downloaden",
   "Download image": "Afbeelding downloaden",
   "In which format would you like to download the image?": "In welk formaat wil je de afbeelding downloaden?",
@@ -694,8 +696,16 @@
   "Turn on Bluetooth": "Bluetooth inschakelen",
   "Try again": "Opnieuw proberen",
   "Enable Bluetooth in Settings > Bluetooth. Setup will resume when you return.": "Schakel Bluetooth in via Instellingen > Bluetooth. De installatie gaat verder zodra je terugkomt.",
+  "Please sign in again to set up your frame.": "Log opnieuw in om je fotolijst in te stellen.",
+  "You do not have access to this organization. Select an organization you belong to, or ask its administrator for access.": "Je hebt geen toegang tot deze organisatie. Kies een organisatie waarvan je lid bent of vraag de beheerder om toegang.",
+  "We could not confirm the activation. Check your internet connection and try again. You do not need to reset your frame.": "We konden de activering niet bevestigen. Controleer je internetverbinding en probeer het opnieuw. Je hoeft je fotolijst hiervoor niet te resetten.",
+  "We could not set up your frame. Please try again or contact support with your device ID.": "We konden je fotolijst niet instellen. Probeer het opnieuw of neem contact op met support en vermeld je apparaat-ID.",
+  "Please wait {{seconds}} seconds": "Wacht {{seconds}} seconden",
+  "This is taking a little longer...": "Het duurt blijkbaar iets langer...",
+  "Device is already connected to Wi-Fi": "Het apparaat is al verbonden met wifi",
   "Photos and text messages from Telegram, with delivery feedback.": "Foto's en tekstberichten uit Telegram, met feedback over de overdracht.",
   "Revoke this integration's write access": "Schrijftoegang van deze integratie intrekken",
   "Write access revoked. Reopen settings to reconnect.": "Schrijftoegang ingetrokken. Open de instellingen opnieuw om weer te verbinden.",
-  "Could not revoke write access. Please try again.": "Schrijftoegang kon niet worden ingetrokken. Probeer het opnieuw."
+  "Could not revoke write access. Please try again.": "Schrijftoegang kon niet worden ingetrokken. Probeer het opnieuw.",
+  "The device assignment changed during setup. Please try again. You do not need to reset your frame.": "De apparaattoewijzing is tijdens de installatie gewijzigd. Probeer het opnieuw. Je hoeft je fotolijst niet te resetten."
 }
