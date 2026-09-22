@@ -38,7 +38,7 @@ changed application code remained in this pass.
 
 ## Validation
 
-- Web: 194 tests in 26 suites passed.
+- Web: 197 tests in 27 suites passed (including the regression follow-up below).
 - API: 214 tests in 22 suites passed, including 31 tests against a disposable
   local MongoDB database with IoT/S3 mocked.
 - Web TypeScript: `tsc --noEmit --incremental false` passed.
@@ -93,3 +93,28 @@ production security sign-off:
 No production database, real Auth0 account, IoT service, or physical frame was
 used in this review run. Native checks were source/syntax checks and web tests,
 not signed app builds or hardware tests.
+
+## Regression follow-up
+
+A subsequent review reproduced and fixed a side effect in the iframe grant
+guard: ordinary parent renders recreated callbacks, invalidating a pending
+grant. The real modal now keeps callbacks stable across resize and mutation-state
+renders, while changing the paper or integration endpoints still invalidates
+the request. Tests cover both successful delivery after resize and refusal after
+a same-origin settings-page change.
+
+An assignment-race 409 now shows a retry message, rather than the legacy
+"already registered" screen and reset link. Legacy already-registered responses
+retain their previous behavior.
+
+GitHub run `35669365876` passed all 408 then-existing unit/database tests and 59
+browser tests. Its two device-settings failures (desktop/mobile) expected an
+obsolete success message already changed on `main`; the artifact showed the
+saved values and current success notice. The browser assertion now checks that
+notice, retaining the submitted-payload and reload/persistence assertions.
+
+Intentional compatibility restrictions remain: non-loopback HTTP settings pages
+are refused, restricted members lose push access, unsupported signed-asset kinds
+return 400, and an unconfirmed orphan is no longer automatically reset. No
+further functional regression was identified in this pass. Native hardware and
+upstream ownership-protocol limits listed above still apply.

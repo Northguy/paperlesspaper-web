@@ -23,7 +23,10 @@ import {
   ACTIVATION_WINDOW_SECONDS,
   useDeviceActivation,
 } from "helpers/devices/useDeviceActivation";
-import { activationErrorMessage } from "helpers/devices/activationErrors";
+import {
+  activationErrorMessage,
+  isAlreadyRegisteredError,
+} from "helpers/devices/activationErrors";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faExternalLink } from "@fortawesome/pro-solid-svg-icons";
 import { useIsDesktop } from "@internetderdinge/web";
@@ -495,7 +498,7 @@ export default function SettingsDevicesNew({
     ? !!debugState?.registrationError
     : registrationIsError;
   const displayedDeviceAlreadyRegistered =
-    displayedRegistrationError?.status === 409;
+    isAlreadyRegisteredError(displayedRegistrationError);
   const displayedDeviceRegisteredInCurrentOrganization =
     displayedDeviceAlreadyRegistered &&
     !!displayedRegistrationError?.data?.device?.id;

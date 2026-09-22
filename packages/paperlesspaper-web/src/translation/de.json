@@ -842,5 +842,6 @@
   "We could not set up your frame. Please try again or contact support with your device ID.": "Wir konnten deinen Rahmen nicht einrichten. Versuche es erneut oder kontaktiere den Support mit deiner Geräte-ID.",
   "Please wait {{seconds}} seconds": "Bitte warte {{seconds}} Sekunden",
   "This is taking a little longer...": "Es dauert wohl etwas länger...",
-  "Device is already connected to Wi-Fi": "Gerät ist bereits mit WLAN verbunden"
+  "Device is already connected to Wi-Fi": "Gerät ist bereits mit WLAN verbunden",
+  "The device assignment changed during setup. Please try again. You do not need to reset your frame.": "Die Gerätezuordnung hat sich während der Einrichtung geändert. Bitte versuche es erneut. Du musst deinen Rahmen nicht zurücksetzen."
 }

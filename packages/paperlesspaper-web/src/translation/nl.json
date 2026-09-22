@@ -706,5 +706,6 @@
   "Photos and text messages from Telegram, with delivery feedback.": "Foto's en tekstberichten uit Telegram, met feedback over de overdracht.",
   "Revoke this integration's write access": "Schrijftoegang van deze integratie intrekken",
   "Write access revoked. Reopen settings to reconnect.": "Schrijftoegang ingetrokken. Open de instellingen opnieuw om weer te verbinden.",
-  "Could not revoke write access. Please try again.": "Schrijftoegang kon niet worden ingetrokken. Probeer het opnieuw."
+  "Could not revoke write access. Please try again.": "Schrijftoegang kon niet worden ingetrokken. Probeer het opnieuw.",
+  "The device assignment changed during setup. Please try again. You do not need to reset your frame.": "De apparaattoewijzing is tijdens de installatie gewijzigd. Probeer het opnieuw. Je hoeft je fotolijst niet te resetten."
 }

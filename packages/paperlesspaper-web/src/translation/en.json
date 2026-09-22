@@ -640,5 +640,6 @@
   "We could not set up your frame. Please try again or contact support with your device ID.": "We could not set up your frame. Please try again or contact support with your device ID.",
   "Please wait {{seconds}} seconds": "Please wait {{seconds}} seconds",
   "This is taking a little longer...": "This is taking a little longer...",
-  "Device is already connected to Wi-Fi": "Device is already connected to Wi-Fi"
+  "Device is already connected to Wi-Fi": "Device is already connected to Wi-Fi",
+  "The device assignment changed during setup. Please try again. You do not need to reset your frame.": "The device assignment changed during setup. Please try again. You do not need to reset your frame."
 }
