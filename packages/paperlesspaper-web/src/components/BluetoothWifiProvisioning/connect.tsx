@@ -8,10 +8,12 @@ import { App } from "@capacitor/app";
 import { useCallback, useEffect, useEffectEvent, useRef, useState } from "react";
 import i18next from "i18next";
 import * as Sentry from "@sentry/react";
+import { observeWifiAttempt } from "./wifiConnectionStatus";
 
 const WIFI_PROVISIONING_SERVICE = "0515c086-7b0c-11ed-a1eb-0242ac120002";
 const DEVICE_DATA_SERVICE = "7f74170e-7b0e-11ed-a1eb-0242ac120002";
 const WIFI_SCAN_CHARACTERISTIC = "5131a3fc-7b0e-11ed-a1eb-0242ac120002";
+const WIFI_CONNECTED_CHARACTERISTIC = "4c578d4c-7b0e-11ed-a1eb-0242ac120002";
 const CONNECT_SSID_CHARACTERISTIC = "090b0ef2-7b0d-11ed-a1eb-0242ac120002";
 const CONNECT_PASSWORD_CHARACTERISTIC = "a62eed84-7b0d-11ed-a1eb-0242ac120002";
 const BLE_SCAN_TIMEOUT = 120000;
@@ -58,6 +60,8 @@ export const useBluetoothWifiProvisioning = ({
   const runIdRef = useRef(0);
   const cancelledRef = useRef(false);
   const writingRef = useRef(false);
+  const observingWifiRef = useRef(false);
+  const [wifiConnectionFailed, setWifiConnectionFailed] = useState(false);
   const [isWriting, setIsWriting] = useState(false);
   const [isRequestingEnable, setIsRequestingEnable] = useState(false);
 
@@ -139,6 +143,7 @@ export const useBluetoothWifiProvisioning = ({
     setConnectionState("initizalize-ble");
     setInitializedBle(true);
     setConnectionError({});
+    setWifiConnectionFailed(false);
     setIsRequestingEnable(false);
 
     try {
@@ -303,7 +308,7 @@ export const useBluetoothWifiProvisioning = ({
       );
 
       function reconnectBluetooth() {
-        if (!isRunActive(runId)) return;
+        if (!isRunActive(runId) || observingWifiRef.current) return;
 
         void BleClient.connect(
           deviceElement.deviceId,
@@ -505,6 +510,7 @@ export const useBluetoothWifiProvisioning = ({
     if (writingRef.current) return;
     writingRef.current = true;
     setIsWriting(true);
+    setWifiConnectionFailed(false);
     const writeRun = runIdRef.current;
     try {
       // Registration must be pending before firmware sends its BLE proof.
@@ -521,6 +527,7 @@ export const useBluetoothWifiProvisioning = ({
         throw new Error("Bluetooth device is not connected.");
       }
 
+      observingWifiRef.current = true;
       await BleClient.write(
         currentDevice.deviceId,
         WIFI_PROVISIONING_SERVICE,
@@ -537,7 +544,23 @@ export const useBluetoothWifiProvisioning = ({
         textToDataView(password)
       );
       if (writeRun !== runIdRef.current) return;
-      //setConnectionState("wifi-written");
+      const outcome = await observeWifiAttempt(
+        () => BleClient.read(
+          currentDevice.deviceId,
+          DEVICE_DATA_SERVICE,
+          WIFI_CONNECTED_CHARACTERISTIC,
+          { timeout: 5000 }
+        ),
+        () => isRunActive(writeRun)
+      );
+      if (outcome === "cancelled" || !isRunActive(writeRun)) return;
+      if (outcome === "failed") {
+        setWifiConnectionFailed(true);
+        setConnectionState("wifi-networks-password");
+        return;
+      }
+      // Only credentials have been sent. Cloud verification still determines
+      // activation success; BLE status 1 is not proof of a connection.
       const cleanupRun = runIdRef.current + 1;
       await cleanupBluetooth();
       if (cleanupRun !== runIdRef.current) return;
@@ -553,6 +576,7 @@ export const useBluetoothWifiProvisioning = ({
       });
       setConnectionState("ble-error");
     } finally {
+      observingWifiRef.current = false;
       writingRef.current = false;
       setIsWriting(false);
     }
@@ -589,6 +613,7 @@ export const useBluetoothWifiProvisioning = ({
     readWifiNetworks,
     writeWifiCredentials,
     isWriting,
+    wifiConnectionFailed,
     cleanupBluetooth,
     debugInfo: {
       requestedDeviceId: deviceId,

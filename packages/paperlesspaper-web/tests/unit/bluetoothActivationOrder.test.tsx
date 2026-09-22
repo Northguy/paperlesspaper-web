@@ -36,7 +36,10 @@ beforeEach(() => {
   vi.clearAllMocks();
   root = createRoot(document.createElement("div"));
 });
-afterEach(() => act(() => root.unmount()));
+afterEach(() => {
+  act(() => root.unmount());
+  vi.useRealTimers();
+});
 async function render(beforeWriteCredentials?: () => Promise<boolean>) {
   function Harness() {
     hook = useBluetoothWifiProvisioning({
@@ -86,6 +89,32 @@ it("does not transmit credentials if activation cannot be started", async () => 
   });
   expect(ble.write).not.toHaveBeenCalled();
   expect(continueProcess).not.toHaveBeenCalled();
+});
+
+it("keeps BLE open on WLAN failure and accepts corrected credentials", async () => {
+  await render(async () => true);
+  vi.useFakeTimers();
+  ble.read.mockResolvedValueOnce(new DataView(Uint8Array.of(1).buffer) as any)
+    .mockResolvedValue(new DataView(Uint8Array.of(0).buffer) as any);
+  const disconnects = ble.disconnect.mock.calls.length;
+  let write: Promise<void>;
+  await act(async () => {
+    write = hook.writeWifiCredentials({ ssid: "Home", password: "wrong" });
+    await vi.advanceTimersByTimeAsync(11000);
+    await write;
+  });
+  expect(hook.wifiConnectionFailed).toBe(true);
+  expect(hook.connectionState).toBe("wifi-networks-password");
+  expect(hook.isWriting).toBe(false);
+  expect(ble.disconnect).toHaveBeenCalledTimes(disconnects);
+  expect(continueProcess).not.toHaveBeenCalled();
+  ble.read.mockResolvedValue("Home,-42");
+  await act(async () => {
+    await hook.writeWifiCredentials({ ssid: "Home", password: "corrected" });
+  });
+  expect(hook.wifiConnectionFailed).toBe(false);
+  expect(ble.write.mock.calls.map(call => call[3])).toEqual(["Home", "wrong", "Home", "corrected"]);
+  expect(continueProcess).toHaveBeenCalledTimes(1);
 });
 
 it("changes normal WLAN credentials without an activation callback", async () => {

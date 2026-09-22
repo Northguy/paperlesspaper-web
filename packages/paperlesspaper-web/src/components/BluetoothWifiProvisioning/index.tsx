@@ -559,6 +559,14 @@ export default function BluetoothWifiProvisioning({
                 showPasswordLabelText={<FontAwesomeIcon icon={faEye} />}
                 hidePasswordLabelText={<FontAwesomeIcon icon={faEyeSlash} />}
               />
+              {bluetoothWifiProvisioning.wifiConnectionFailed && (
+                <p role="alert">
+                  <Trans>Wi-Fi connection failed. Could the password be incorrect?</Trans>
+                </p>
+              )}
+              {bluetoothWifiProvisioning.isWriting && (
+                <p role="status"><Trans>Connecting to Wi-Fi...</Trans></p>
+              )}
               <div className={styles.noPasswordOption}>
                 <Controller
                   name="noPassword"
