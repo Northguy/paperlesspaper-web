@@ -18,7 +18,7 @@ const render = () => renderService.generateImageFromUrl({
 describe("failed page rendering", () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    page.goto.mockResolvedValue({ ok: () => true });
+    page.goto.mockResolvedValue({ status: () => 200 });
     page.evaluate
       .mockResolvedValueOnce({ loading: true, loaded: false })
       .mockResolvedValueOnce(undefined)
@@ -28,11 +28,31 @@ describe("failed page rendering", () => {
     page.screenshot.mockResolvedValue(Buffer.from("rendered image"));
   });
 
-  it("rejects HTTP failures before taking a screenshot and closes the page", async () => {
-    page.goto.mockResolvedValue({ ok: () => false, status: () => 503 });
+  it.each([400, 401, 403, 404, 429, 500, 503, 599])("rejects HTTP %s before taking a screenshot and closes the page", async (status) => {
+    page.goto.mockResolvedValue({ ok: () => false, status: () => status });
     const result = await render();
     expect(result.buffer).toBeNull();
-    expect(result.diagnostics.error?.message).toContain("HTTP 503");
+    expect(result.diagnostics.error?.message).toContain(`HTTP ${status}`);
+    expect(page.screenshot).not.toHaveBeenCalled();
+    expect(page.close).toHaveBeenCalledOnce();
+  });
+
+  it.each([200, 204, 205, 206, 300, 302, 304, 307, 308, 399])("attempts rendering a ready document after HTTP %s", async (status) => {
+    page.goto.mockResolvedValue({ status: () => status });
+    const result = await render();
+    expect(result.buffer?.toString()).toBe("rendered image");
+    expect(result.diagnostics.outcome).toBe("success");
+    expect(result.diagnostics.initPayloadSent).toBe(true);
+    expect(page.waitForSelector).toHaveBeenCalled();
+    expect(page.close).toHaveBeenCalledOnce();
+  });
+
+  it("still rejects an unfinished render after HTTP 304", async () => {
+    page.goto.mockResolvedValue({ ok: () => false, status: () => 304 });
+    page.waitForSelector.mockRejectedValue(new Error("timeout"));
+    const result = await render();
+    expect(result.buffer).toBeNull();
+    expect(result.diagnostics.readiness.outcome).toBe("timeout");
     expect(page.screenshot).not.toHaveBeenCalled();
     expect(page.close).toHaveBeenCalledOnce();
   });

@@ -1211,12 +1211,14 @@ const updatePlaylist = async (
   return { message: "Playlist has no valid active paper" };
 };
 
+const MAX_SLIDESHOW_ATTEMPTS = 3;
+
 const updateNextSlide = async (
   paper: any,
   device: any,
   trigger = "slideshow",
-): Promise<void> => {
-  var result = {};
+): Promise<Record<string, any> | undefined> => {
+  const result: Record<string, any> = {};
   const organizationId =
     paper?.organization?.toString?.() || paper?.organization;
   if (!organizationId) {
@@ -1288,14 +1290,19 @@ const updateNextSlide = async (
     const lastSelectedIndex = selectedPapersArrayOnlyExisting.findIndex(
       (slide) => slide.key === paper.meta.lastSelectedPaperId,
     );
+    const retryIndex = selectedPapersArrayOnlyExisting.findIndex(
+      (slide) => slide.key === paper.meta.slideshowRetryPaperId,
+    );
     const currentSlide =
-      lastSelectedIndex >= 0
-        ? (lastSelectedIndex + 1) % selectedSlidesCount
-        : Number.isInteger(rawCurrentSlide) &&
-            rawCurrentSlide >= 0 &&
-            rawCurrentSlide < selectedSlidesCount
-          ? rawCurrentSlide
-          : 0;
+      retryIndex >= 0
+        ? retryIndex
+        : lastSelectedIndex >= 0
+          ? (lastSelectedIndex + 1) % selectedSlidesCount
+          : Number.isInteger(rawCurrentSlide) &&
+              rawCurrentSlide >= 0 &&
+              rawCurrentSlide < selectedSlidesCount
+            ? rawCurrentSlide
+            : 0;
 
     selectedSlide = selectedPapersArrayOnlyExisting[currentSlide];
 
@@ -1304,27 +1311,73 @@ const updateNextSlide = async (
     result.selectedSequential = nextSlideIndex;
   }
 
-  if (selectedSlide?.key) {
-    // console.log('Updating slide to', selectedSlide.key);
-    const selectedPaper = await getById(selectedSlide?.key);
+  if (!selectedSlide?.key) return result;
 
-    result.uploadSingleImageFromAny = await uploadSingleImageFromAny(
-      selectedPaper,
-      paper,
-      device,
-      trigger,
-    );
-    // Keep the current position if rendering or uploading fails, so retries
-    // prepare the same sequential slide instead of silently skipping it.
+  const startIndex = selectedPapersArrayOnlyExisting.indexOf(selectedSlide);
+  // Try up to three sequential entries, wrapping at the end of the list.
+  // Random selection retains its existing single-attempt behavior.
+  const candidates = paper.meta.order === "random"
+    ? [selectedSlide]
+    : [
+        ...selectedPapersArrayOnlyExisting.slice(startIndex),
+        ...selectedPapersArrayOnlyExisting.slice(0, startIndex),
+      ].slice(0, MAX_SLIDESHOW_ATTEMPTS);
+
+  let lastError: unknown;
+  for (const candidate of candidates) {
+    try {
+      const selectedPaper = await getById(candidate.key);
+      result.uploadSingleImageFromAny = await uploadSingleImageFromAny(
+        selectedPaper,
+        paper,
+        device,
+        trigger,
+      );
+    } catch (error) {
+      lastError = error;
+      (result.skippedPaperIds ??= []).push(candidate.key);
+      // Avoid logging URLs/settings or upstream errors containing credentials.
+      console.warn("Slideshow entry failed", {
+        slideshowId: paper._id?.toString(),
+        sourcePaperId: candidate.key,
+      });
+      continue;
+    }
+
+    if (paper.meta.order !== "random") {
+      nextSlideIndex =
+        (selectedPapersArrayOnlyExisting.indexOf(candidate) + 1) %
+        selectedPapersArrayOnlyExisting.length;
+      result.selectedSequential = nextSlideIndex;
+    }
+    // Persist only after a successful upload. A save failure must not trigger
+    // another upload; if all candidates fail, keep the previous position.
     result.updateById = await updateById(paper._id, {
       meta: {
         ...paper.meta,
         currentSlide: nextSlideIndex,
-        lastSelectedPaperId: selectedSlide.key,
+        lastSelectedPaperId: candidate.key,
+        slideshowRetryPaperId: undefined,
       },
     });
+    return result;
   }
-  return result;
+  if (
+    paper.meta.order !== "random" &&
+    candidates.length < selectedPapersArrayOnlyExisting.length
+  ) {
+    const nextCandidate = selectedPapersArrayOnlyExisting[
+      (startIndex + candidates.length) % selectedPapersArrayOnlyExisting.length
+    ];
+    // Save only retry progress. A failed render must not activate this paper
+    // on the device or change the last successfully displayed slide.
+    await Paper.updateOne(
+      { _id: paper._id },
+      { $set: { "meta.slideshowRetryPaperId": nextCandidate.key } },
+    );
+  }
+  // Let the scheduler release its claim and retry at a later opportunity.
+  throw lastError;
 };
 
 export default {

@@ -347,7 +347,9 @@ const generateImageFromUrl = async ({
         timeout: 15000,
       }),
     );
-    if (navigationResponse && !navigationResponse.ok()) {
+    // Reject explicit HTTP errors only. Other responses (including cached
+    // documents reported as 304) still need to pass the render readiness checks.
+    if (navigationResponse && navigationResponse.status() >= 400) {
       throw new Error(`Render page returned HTTP ${navigationResponse.status()}`);
     }
     await measure("adBlockMs", () => adBlock(page!));
